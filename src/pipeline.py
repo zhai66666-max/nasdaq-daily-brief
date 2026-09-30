@@ -155,6 +155,32 @@ def collect_drawdown_radar() -> dict:
     metrics = compute_all_metrics(adj_close, latest_close)
     logger.info("  [radar] 计算完成 %d 个资产", len(metrics))
 
+    # ── 统一口径：纳斯达克100（QQQM）行的「距高点回撤」改走 NDX 指数，
+    #    与 02 区块、加仓决策引擎同源，消除「ETF 复权 1.48%」vs「指数 1.27%」双口径打架。
+    #    价格/涨跌仍显示 QQQM 实时值，只覆盖回撤这一族字段；失败则沿用原 ETF 复权口径。
+    try:
+        from src.providers.common.ndx_drawdown import get_nasdaq_drawdown
+        _ndx = get_nasdaq_drawdown()
+        _ndx_keys = ("dd_52w", "max_dd_52w", "dd_5y", "dd_historical",
+                     "max_dd_historical", "dd_percentile", "cycle_max_dd",
+                     "vol_20d", "dist_from_ath", "ath_date", "days_since_ath",
+                     "status_label", "status_color", "status_emoji")
+        _overridden = False
+        for _m in metrics:
+            if _m.get("ticker") == "QQQM":
+                for _k in _ndx_keys:
+                    if _k in _ndx:
+                        _m[_k] = _ndx[_k]
+                _m["caliber"] = "NDX指数"
+                _overridden = True
+                logger.info("  [radar] QQQM 行回撤已统一为 NDX 指数口径（历史回撤 %.2f%%，来源 %s）",
+                            (_ndx["dd_historical"] or 0) * 100, _ndx.get("source"))
+                break
+        if not _overridden:
+            logger.warning("  [radar] 未找到 QQQM 行，跳过 NDX 统一口径覆盖")
+    except Exception as exc:                        # noqa: BLE001
+        logger.warning("  [radar] NDX 统一口径覆盖失败，沿用 ETF 复权口径：%s", exc)
+
     # 回撤那一族锚在「已收盘」那根日线的收盘价，价格/涨跌是盘面快照 ——
     # 两个基准都带出来给邮件标注。不标的话，02 区块的纳指回撤锁死、
     # 而 10 区块的各资产回撤随盘中跳动，同一封邮件里看着自相矛盾。

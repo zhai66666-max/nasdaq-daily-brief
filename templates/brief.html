@@ -537,8 +537,8 @@
 </table>
 </div>
 <div style="font-size:10px;color:{{ theme.ink_mute }};margin-top:8px;line-height:1.7;">
-本区块含两种口径：<b>价格与涨跌</b>为 {{ radar.snapshot_label or '最新' }} 盘面快照；<b>回撤与分位</b>为收盘口径{{ ('（截至 ' ~ radar.basis_label ~ '）') if radar.basis_label else '' }}，口径为各资产自身全部历史 —— 与 02 区块的纳指回撤同源。<br>
-长期回撤使用复权价格（Adj Close），最新价使用未复权收盘价 · 分位数基于 expanding-window 计算，无未来数据泄露
+本区块含两种口径：<b>价格与涨跌</b>为 {{ radar.snapshot_label or '最新' }} 盘面快照；<b>回撤与分位</b>为收盘口径{{ ('（截至 ' ~ radar.basis_label ~ '）') if radar.basis_label else '' }}，口径为各资产自身全部历史。<br>
+纳斯达克100 行（QQQM）的「距高点回撤」采用 <b>NDX 指数口径</b>，与 02 区块、加仓决策引擎同源；其余资产长期回撤使用复权价格（Adj Close），最新价使用未复权收盘价 · 分位数基于 expanding-window 计算，无未来数据泄露
 </div>
 </td></tr>
 {% endif %}

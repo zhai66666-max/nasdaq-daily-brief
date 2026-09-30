@@ -83,7 +83,7 @@ MACRO_INDICATORS = [
 def fetch_ticker_data(ticker: str, period: str = "1y") -> Optional[Dict[str, Any]]:
     """获取单个 ticker 的最新数据。yfinance 失败或已熔断时走兜底源。"""
     if _breaker().is_open():
-        return _fetch_ticker_fallback(ticker, period)
+        return _unify_qqq_drawdown(ticker, _fetch_ticker_fallback(ticker, period))
     try:
         t = yf.Ticker(ticker)
         # QQQ 用全量历史数据，计算历史最高收盘价回撤
@@ -108,7 +108,7 @@ def fetch_ticker_data(ticker: str, period: str = "1y") -> Optional[Dict[str, Any
         drawdown = (cur - all_time_high) / all_time_high * 100
         prev_val = _safe_float(hist["Close"].iloc[-2]) if len(hist) >= 2 else cur
         change_pct = ((cur - prev_val) / prev_val * 100) if prev_val != 0.0 else 0.0
-        return {
+        data = {
             "ticker": ticker,
             "price": round(cur, 4),
             "all_time_high": round(all_time_high, 4),
@@ -118,7 +118,33 @@ def fetch_ticker_data(ticker: str, period: str = "1y") -> Optional[Dict[str, Any
     except Exception as exc:
         logger.warning("获取 %s 失败: %s", ticker, exc)
         _breaker().record_failure(str(exc))
-        return _fetch_ticker_fallback(ticker, period)
+        data = _fetch_ticker_fallback(ticker, period)
+
+    # 统一口径：QQQ 行的「距高点回撤」改走 NDX 指数，与 02 区块、雷达同源
+    data = _unify_qqq_drawdown(ticker, data)
+    return data
+
+
+def _unify_qqq_drawdown(ticker: str, data: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    """QQQ 宏观卡的回撤统一为 NDX 指数口径（与加仓决策引擎、02 区块同源）。
+
+    只覆盖 drawdown_pct（指数距高点回撤），价格/涨跌仍保留 QQQ 自身实时值；
+    all_time_high 不在宏观卡展示，故不动。任何失败都回退到 QQQ 自身口径。
+    """
+    if ticker != "QQQ" or not data:
+        return data
+    try:
+        from src.providers.common.ndx_drawdown import get_nasdaq_drawdown
+        ndx = get_nasdaq_drawdown()
+        dd = ndx.get("current_drawdown")
+        if dd is None:
+            return data
+        data = dict(data)
+        data["drawdown_pct"] = round(float(dd) * 100, 2)
+        logger.info("QQQ 宏观卡回撤已统一为 NDX 指数口径：%.2f%%", data["drawdown_pct"])
+    except Exception as exc:                        # noqa: BLE001
+        logger.warning("QQQ 统一口径失败，沿用 QQQ 自身回撤：%s", exc)
+    return data
 
 
 # 兜底源能覆盖的标的（全部为美股上市证券）；VIX/TNX/DXY/汇率不在其中
