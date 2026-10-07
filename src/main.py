@@ -97,9 +97,9 @@ def build(args) -> tuple[str, dict, str]:
     run_date = pipeline.beijing_date_str()
     t0 = time.time()
 
-    # 1) 三个来源并发抓取（单源失败被隔离）
+    # 1) 四个来源并发抓取（单源失败被隔离）
     logger.info("─" * 62)
-    logger.info("① 采集数据（3 个来源并发）")
+    logger.info("① 采集数据（4 个来源并发）")
     results = pipeline.collect_all(run_date)
     ok_n = sum(1 for r in results.values() if r.ok)
     logger.info("   完成：%d/%d 个来源成功，耗时 %.1fs", ok_n, len(results), time.time() - t0)

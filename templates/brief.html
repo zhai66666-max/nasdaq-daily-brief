@@ -621,15 +621,78 @@
 {% endif %}
 {% endif %}
 
+{% if gold and sections.gold_etf %}
+<!-- ══════════ 13 黄金 ETF 溢价排名 ══════════ -->
+{{ sec('13', '黄金 ETF 溢价排名', gold.data_status ~ ' · 净值基准 ' ~ gold.basis_label) }}
+<tr><td style="padding:0 30px 10px;">
+<table class="m4" width="100%" cellpadding="0" cellspacing="0"><tr>
+{{ metric('上海金最优选', (gold.sh_best.short_name if gold.sh_best else '—'),
+          ((gold.sh_best.code ~ '　溢价 ' ~ gold.sh_best.premium_display ~ '　成交额 ' ~ gold.sh_best.amount_display) if gold.sh_best else '组内无溢价 ≤' ~ gold.premium_ok_max ~ '% 且流动性足够的标的'),
+          (severity.normal if gold.sh_best else severity.watch)) }}
+{{ metric('黄金最优选', (gold.au_best.short_name if gold.au_best else '—'),
+          ((gold.au_best.code ~ '　溢价 ' ~ gold.au_best.premium_display ~ '　成交额 ' ~ gold.au_best.amount_display) if gold.au_best else '组内无溢价 ≤' ~ gold.premium_ok_max ~ '% 且流动性足够的标的'),
+          (severity.normal if gold.au_best else severity.watch)) }}
+{{ metric('全场最低溢价', gold.lowest_display, gold.lowest_label, severity.normal) }}
+{{ metric('基准日', (gold.nav_date or '—'), '取数时最新已披露单位净值', theme.ink_soft) }}
+</tr></table>
+</td></tr>
+<tr><td style="padding:0 30px;">
+<div>
+<table class="mt" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;font-size:12px;table-layout:fixed;width:100%;">
+<colgroup>
+<col style="width:5%;"><col style="width:9%;"><col style="width:20%;"><col style="width:12%;">
+<col style="width:12%;"><col style="width:10%;"><col style="width:12%;"><col style="width:12%;"><col style="width:8%;">
+</colgroup>
+<tr class="hd" style="background:{{ theme.panel }};">
+<th style="padding:9px 6px;text-align:left;font-size:11px;color:{{ theme.ink_soft }};border-bottom:2px solid {{ theme.line }};">#</th>
+<th style="padding:9px 6px;text-align:left;font-size:11px;color:{{ theme.ink_soft }};border-bottom:2px solid {{ theme.line }};">类别</th>
+<th style="padding:9px 6px;text-align:left;font-size:11px;color:{{ theme.ink_soft }};border-bottom:2px solid {{ theme.line }};">ETF</th>
+<th style="padding:9px 6px;text-align:right;font-size:11px;color:{{ theme.ink_soft }};border-bottom:2px solid {{ theme.line }};">价格</th>
+<th style="padding:9px 6px;text-align:right;font-size:11px;color:{{ theme.ink_soft }};border-bottom:2px solid {{ theme.line }};">溢价率</th>
+<th style="padding:9px 6px;text-align:right;font-size:11px;color:{{ theme.ink_soft }};border-bottom:2px solid {{ theme.line }};">涨跌</th>
+<th style="padding:9px 6px;text-align:right;font-size:11px;color:{{ theme.ink_soft }};border-bottom:2px solid {{ theme.line }};">成交额</th>
+<th style="padding:9px 6px;text-align:right;font-size:11px;color:{{ theme.ink_soft }};border-bottom:2px solid {{ theme.line }};">买卖价差</th>
+<th style="padding:9px 6px;text-align:center;font-size:11px;color:{{ theme.ink_soft }};border-bottom:2px solid {{ theme.line }};">状态</th>
+</tr>
+{% for e in gold.ranked %}
+<tr>
+<td class="mh" style="padding:8px 6px;font-size:12px;color:{{ theme.ink_mute }};border-bottom:1px solid {{ theme.line }};">{{ loop.index }}</td>
+<td class="mk" style="padding:8px 6px;font-size:11px;color:{{ theme.accent }};border-bottom:1px solid {{ theme.line }};">{{ e.category }}</td>
+<td class="mk" style="padding:8px 6px;font-size:12px;color:{{ theme.ink }};border-bottom:1px solid {{ theme.line }};"><b>{{ e.code }}</b> <span style="color:{{ theme.ink_soft }};">{{ e.short_name }}</span></td>
+<td data-l="价格" style="padding:8px 6px;font-size:12px;text-align:right;color:{{ theme.ink_soft }};border-bottom:1px solid {{ theme.line }};">{{ e.price_display }}</td>
+<td data-l="溢价" style="padding:8px 6px;font-size:12px;text-align:right;font-weight:700;color:{{ tone('up') if e.premium <= gold.premium_ok_max else severity.watch }};border-bottom:1px solid {{ theme.line }};">{{ e.premium_display }}</td>
+<td data-l="涨跌" style="padding:8px 6px;font-size:12px;text-align:right;color:{{ e.change_color }};border-bottom:1px solid {{ theme.line }};">{{ e.change_display }}</td>
+<td data-l="额" style="padding:8px 6px;font-size:12px;text-align:right;color:{{ theme.ink_soft }};border-bottom:1px solid {{ theme.line }};">{{ e.amount_display }}{% if e.low_liquidity %} <span style="color:{{ severity.watch }};">⚠</span>{% endif %}</td>
+<td data-l="价差" style="padding:8px 6px;font-size:12px;text-align:right;color:{{ theme.ink_mute }};border-bottom:1px solid {{ theme.line }};">{{ e.spread_display }}</td>
+<td data-l="状态" style="padding:8px 6px;font-size:11px;text-align:center;color:{{ theme.ink_soft }};border-bottom:1px solid {{ theme.line }};">{{ e.premium_level.emoji }} {{ e.premium_level.label }}</td>
+</tr>
+{% endfor %}
+</table>
+</div>
+<div style="background:{{ theme.panel }};border:1px solid {{ theme.line }};border-radius:10px;padding:12px 15px;margin-top:10px;">
+<div style="font-size:12px;line-height:1.8;color:{{ theme.ink_soft }};">{{ gold.verdict }}</div>
+</div>
+<div style="font-size:10px;color:{{ theme.ink_mute }};margin-top:8px;line-height:1.7;">
+溢价基准：{{ gold.basis_label }}（取数时最新<b>已披露</b>单位净值；若当日净值尚未更新则为 T-1）· 类别按基金全称与跟踪标的判定：跟踪上海金（SHAU）为「上海金」，其余为 Au99.99 现货合约 · ⚠ = 成交额低于 1000 万 · 已剔除黄金股 ETF（标的是股票不是金价）
+</div>
+{% if gold.failed %}
+<div style="font-size:10px;color:{{ theme.ink_mute }};margin-top:4px;">
+{% for f in gold.failed %}· {{ f.code }} {{ f.name }} 本次未取到数据{% endfor %}
+</div>
+{% endif %}
+</td></tr>
+{% endif %}
+
 <!-- ══════════ 页脚 ══════════ -->
 <tr><td style="padding:26px 30px 24px;">
 <div style="border-top:1px solid {{ theme.line }};padding-top:16px;">
 <div style="font-size:10px;color:{{ theme.ink_mute }};line-height:1.9;">
 <b style="color:{{ theme.ink_soft }};">数据来源与口径</b><br>
 纳指历史回撤：{{ (etf_monitor.ndx_source ~ '（' ~ etf_monitor.ndx_count ~ ' 条日线' ~ ('，截至 ' ~ etf_monitor.dd_as_of_short if etf_monitor.dd_as_of_short else '') ~ '）') if etf_monitor else '—' }} · 国内 ETF：腾讯财经行情 + 东方财富 T-1 净值<br>
+黄金 ETF：腾讯财经行情 + 东方财富基金档案（跟踪标的）· 净值基准日见 13 区块<br>
 指数行情：{{ nasdaq100.ix.data_source if nasdaq100 else '—' }} · 成分股：{{ nasdaq100.components_source if nasdaq100 else '—' }} · 全球回撤：{{ radar.data_source if radar else '—' }}<br>
 <b style="color:{{ theme.ink_soft }};">口径：</b>页头指数、05 宏观报价、08 成分股涨跌榜、09 全球价格与涨跌为<b style="color:{{ theme.ink_soft }};">盘面快照</b>（{{ summary.ndx_bar_label or '最新' }}，随行情变动）；52 周收盘区间与分位、50/200 日均线、RSI、20 日均量、以及<b style="color:{{ theme.ink_soft }};">全部历史回撤</b>（02 纳指 / 10 全球，各自区块内标注基准日）均为<b style="color:{{ theme.ink_soft }};">收盘口径</b>，同一封邮件内互不矛盾<br>
-回撤 = 当前收盘价 / 历史最高收盘价 − 1 · 历史回撤分位基于 expanding-window，无未来数据泄露 · 溢价率基于 T-1 净值，非实时 IOPV<br>
+回撤 = 当前收盘价 / 历史最高收盘价 − 1 · 历史回撤分位基于 expanding-window，无未来数据泄露 · 纳指 ETF 溢价率基于 T-1 净值，非实时 IOPV · 黄金 ETF 溢价率基于 13 区块标注的净值基准日（最新已披露净值）<br>
 {% if ai.analysis_sections or ai.commentary %}AI 解读由 DeepSeek 生成，仅作参考 · {% endif %}本简报不构成投资建议，投资决策请结合自身情况独立判断<br>
 生成时间 {{ meta.run_ts }}（北京时间） · 由 nasdaq-daily-brief 自动生成
 </div>

@@ -459,3 +459,58 @@ def derive_etf_monitor(raw: dict, convention: str = "cn") -> dict:
         "basis_label": raw["basis_label"],
         "failed_etfs": raw["failed_etfs"],
     }
+
+
+# ─── 来源 4：黄金 / 上海金 ETF 溢价（13 区块）───────────────────────────────
+
+def derive_gold(raw: dict, convention: str = "cn") -> dict:
+    """格式化 + 结论。raw 来自 src/providers/gold_etf.build()。"""
+    ranked = raw["ranked"]
+    for e in ranked:
+        e["premium_display"] = (f"{e['premium']:+.3f}%" if e.get("premium") is not None else "—")
+        e["price_display"] = price(e.get("price"), 3)
+        e["amount_display"] = money_cn(e.get("amount"))
+        e["change_display"] = pct_from_percent(e.get("change_pct"), 2, signed=True)
+        e["change_color"] = change_color(e.get("change_pct"), convention)
+        e["spread_display"] = (f"{e['spread']:.3f}%" if e.get("spread") is not None else "—")
+
+    def _best(pool):
+        """组内「溢价 ≤ 上限 里成交额最大」的那只 —— 便宜又好买。"""
+        qualified = [r for r in pool
+                     if r.get("premium") is not None
+                     and r["premium"] <= raw["premium_ok_max"]
+                     and not r["low_liquidity"]]
+        return max(qualified, key=lambda r: r.get("amount") or 0) if qualified else None
+
+    sh_best = _best(raw["sh"])
+    au_best = _best(raw["au"])
+    lowest = ranked[0] if ranked else None
+
+    # 一句话结论：黄金 ETF 溢价常年贴着 0，真正要说的是「有没有异常」和「选哪只」
+    abnormal = [r for r in ranked if r["premium"] > 1.0]
+    if abnormal:
+        verdict = (f"有 {len(abnormal)} 只溢价超过 1%（"
+                   + "、".join(f"{r['code']} {r['premium']:.2f}%" for r in abnormal[:3])
+                   + "），溢价回落风险大于金价本身波动")
+    else:
+        verdict = (f"全部 {len(ranked)} 只溢价都在 ±0.2% 以内，套利充分，"
+                   f"选哪只主要看流动性而不是溢价")
+
+    return {
+        "ranked": ranked,
+        "sh": raw["sh"],
+        "au": raw["au"],
+        "sh_count": raw["sh_count"],
+        "au_count": raw["au_count"],
+        "sh_best": sh_best,
+        "au_best": au_best,
+        "lowest": lowest,
+        "lowest_display": (f"{lowest['premium']:+.3f}%" if lowest else "—"),
+        "lowest_label": (f"{lowest['code']} {lowest['short_name']}" if lowest else "—"),
+        "nav_date": raw["nav_date"],
+        "basis_label": raw["basis_label"],
+        "data_status": raw["data_status"],
+        "failed": raw["failed"],
+        "premium_ok_max": raw["premium_ok_max"],
+        "verdict": verdict,
+    }

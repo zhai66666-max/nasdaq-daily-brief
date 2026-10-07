@@ -238,17 +238,31 @@ def collect_nasdaq100() -> dict:
             "components_source": core.LAST_COMPONENTS_SOURCE}
 
 
+# ── 来源 4：黄金 / 上海金 ETF 溢价排名（13 区块）────────────────────────────
+# 独立于 etf_monitor：那边是纳指 ETF（T+1 净值 + 2% 阈值），这边是黄金
+# （最新已披露净值 + 0.3% 阈值），标的分开、阈值分开，公式与排序共用同一套口径。
+# 分类不看简称，走跟踪标的（东财基金档案）——「金ETF」系列其实是上海金。
+
+def collect_gold_etf() -> dict:
+    from src.providers import gold_etf
+
+    data = gold_etf.build()
+    logger.info("  [gold_etf] %s｜净值基准 %s", data["data_status"], data["basis_label"])
+    return data
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 
 SOURCES = [
     ("etf_monitor",    "纳指回撤 × ETF溢价", collect_etf_monitor),
     ("drawdown_radar", "全球回撤雷达",       collect_drawdown_radar),
     ("nasdaq100",      "纳指深度数据",       collect_nasdaq100),
+    ("gold_etf",       "黄金ETF溢价",        collect_gold_etf),
 ]
 
 
-def collect_all(run_date: str, max_workers: int = 3) -> dict[str, SourceResult]:
-    """并发跑三个来源，单源失败被隔离。"""
+def collect_all(run_date: str, max_workers: int = 4) -> dict[str, SourceResult]:
+    """并发跑四个来源，单源失败被隔离。"""
     results: dict[str, SourceResult] = {}
     t_all = time.time()
 

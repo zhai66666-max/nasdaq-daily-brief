@@ -9,7 +9,7 @@ from jinja2 import Environment, FileSystemLoader, StrictUndefined, select_autoes
 from src import ai as ai_mod
 from src import pipeline
 from src.derive import (
-    change_color, derive_etf_monitor, derive_nasdaq100, derive_radar,
+    change_color, derive_etf_monitor, derive_gold, derive_nasdaq100, derive_radar,
     fmt_vol, money_cn, pct, pct_from_percent, price, updown_colors,
 )
 from src.paths import TEMPLATES_DIR
@@ -49,10 +49,12 @@ def build_context(results: dict[str, pipeline.SourceResult],
     em = results.get("etf_monitor")
     rd = results.get("drawdown_radar")
     nq = results.get("nasdaq100")
+    gd = results.get("gold_etf")
 
     em_data = derive_etf_monitor(em.data, convention) if (em and em.ok) else None
     rd_data = derive_radar(rd.data, convention) if (rd and rd.ok) else None
     nq_data = derive_nasdaq100(nq.data, convention, thr) if (nq and nq.ok) else None
+    gd_data = derive_gold(gd.data, convention) if (gd and gd.ok) else None
 
     # ── 顶部核心摘要
     # 先填默认值：某个来源失败时模板仍能渲染完整结构，只是对应位置显示 —，
@@ -165,6 +167,8 @@ def build_context(results: dict[str, pipeline.SourceResult],
                 ("galert", "11 全球回撤新信号")]
     if ai_out and (ai_out.get("analysis_sections") or ai_out.get("commentary")):
         toc.append(("ai", "12 AI 深度分析"))
+    if gd_data:
+        toc.append(("gold", "13 黄金 ETF 溢价排名"))
 
     return {
         "brand": display["brand"],
@@ -187,6 +191,7 @@ def build_context(results: dict[str, pipeline.SourceResult],
         "etf_monitor": em_data,
         "radar": rd_data,
         "nasdaq100": nq_data,
+        "gold": gd_data,
         "ai": ai_out or {"analysis_sections": [], "commentary": None},
         "sources": [
             {"key": r.key, "label": r.label, "ok": r.ok,
