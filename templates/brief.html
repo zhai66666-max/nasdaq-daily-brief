@@ -623,7 +623,7 @@
 
 {% if gold and sections.gold_etf %}
 <!-- ══════════ 13 黄金 ETF 溢价排名 ══════════ -->
-{{ sec('13', '黄金 ETF 溢价排名', gold.data_status ~ ' · 净值基准 ' ~ gold.basis_label) }}
+{{ sec('13', '黄金 ETF 溢价排名', gold.data_status ~ ' · 场内价 ' ~ gold.price_label ~ ' · 净值基准 ' ~ gold.basis_label) }}
 <tr><td style="padding:0 30px 10px;">
 <table class="m4" width="100%" cellpadding="0" cellspacing="0"><tr>
 {{ metric('上海金最优选', (gold.sh_best.short_name if gold.sh_best else '—'),
@@ -633,7 +633,8 @@
           ((gold.au_best.code ~ '　溢价 ' ~ gold.au_best.premium_display ~ '　成交额 ' ~ gold.au_best.amount_display) if gold.au_best else '组内无溢价 ≤' ~ gold.premium_ok_max ~ '% 且流动性足够的标的'),
           (severity.normal if gold.au_best else severity.watch)) }}
 {{ metric('全场最低溢价', gold.lowest_display, gold.lowest_label, severity.normal) }}
-{{ metric('基准日', (gold.nav_date or '—'), '取数时最新已披露单位净值', theme.ink_soft) }}
+{{ metric('净值基准日', (gold.nav_date or '—'),
+          '场内价取自 ' ~ (gold.quote_date or '—'), theme.ink_soft) }}
 </tr></table>
 </td></tr>
 <tr><td style="padding:0 30px;">
@@ -672,8 +673,11 @@
 <div style="background:{{ theme.panel }};border:1px solid {{ theme.line }};border-radius:10px;padding:12px 15px;margin-top:10px;">
 <div style="font-size:12px;line-height:1.8;color:{{ theme.ink_soft }};">{{ gold.verdict }}</div>
 </div>
+{% if gold.price_note %}
+<div style="border-left:3px solid {{ severity.watch }};background:{{ theme.panel }};border-radius:6px;padding:10px 13px;margin-top:8px;font-size:11px;line-height:1.7;color:{{ theme.ink_soft }};">{{ gold.price_note }}</div>
+{% endif %}
 <div style="font-size:10px;color:{{ theme.ink_mute }};margin-top:8px;line-height:1.7;">
-溢价基准：{{ gold.basis_label }}（取数时最新<b>已披露</b>单位净值；若当日净值尚未更新则为 T-1）· 类别按基金全称与跟踪标的判定：跟踪上海金（SHAU）为「上海金」，其余为 Au99.99 现货合约 · ⚠ = 成交额低于 1000 万 · 已剔除黄金股 ETF（标的是股票不是金价）
+场内行情：{{ gold.price_label }} · 净值基准：{{ gold.basis_label }}（取数时最新<b>已披露</b>单位净值，可能滞后于场内价）· 类别按基金全称与跟踪标的判定：跟踪上海金（SHAU）为「上海金」，其余为 Au99.99 现货合约 · ⚠ = 成交额低于 1000 万 · 已剔除黄金股 ETF（标的是股票不是金价）
 </div>
 {% if gold.failed %}
 <div style="font-size:10px;color:{{ theme.ink_mute }};margin-top:4px;">

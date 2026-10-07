@@ -296,8 +296,19 @@ def build() -> dict:
     au = [r for r in ok if r["category"] == "黄金"]
     nav_dates = sorted({r["nav_date"] for r in ok if r.get("nav_date")})
     nav_date = nav_dates[-1] if nav_dates else ""
-    quote_time = next((r.get("quote_time") for r in ok if r.get("quote_time")), "")
     basis = f"{nav_date} 单位净值" if nav_date else "未知"
+
+    # 场内价的那一天。别省这一步：简报在北京 06:45 跑，A 股还没开盘，
+    # 行情其实是**上一交易日收盘**；遇上长假（如国庆）会差好几天。
+    # 只标净值基准日的话，读者会误以为"用今天的价配 9-30 的净值"，把正常溢价看成异常。
+    # 腾讯 quote_time 形如 20260930161457，可直接按字典序取最新。
+    qtimes = sorted({r.get("quote_time") for r in ok if r.get("quote_time")})
+    quote_time = qtimes[-1] if qtimes else ""
+    quote_date = (f"{quote_time[4:6]}-{quote_time[6:8]}"
+                  if len(quote_time) >= 8 and quote_time[:8].isdigit() else "")
+    quote_hm = (f"{quote_time[8:10]}:{quote_time[10:12]}"
+                if len(quote_time) >= 12 and quote_time[8:12].isdigit() else "")
+    stale = bool(quote_date and quote_date != (nav_date[5:10] if len(nav_date) >= 10 else ""))
 
     return {
         "ranked": ok,
@@ -306,6 +317,9 @@ def build() -> dict:
         "au": au,
         "nav_date": nav_date,
         "quote_time": quote_time,
+        "quote_date": quote_date,
+        "quote_hm": quote_hm,
+        "stale": stale,
         "basis_label": basis,
         "sh_count": len(sh),
         "au_count": len(au),

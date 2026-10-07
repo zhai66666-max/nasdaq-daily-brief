@@ -496,6 +496,29 @@ def derive_gold(raw: dict, convention: str = "cn") -> dict:
         verdict = (f"全部 {len(ranked)} 只溢价都在 ±0.2% 以内，套利充分，"
                    f"选哪只主要看流动性而不是溢价")
 
+    # 场内价的那一天（简报 06:45 跑时是上一交易日收盘，长假后会差好几天）。
+    # 两种异常都要说出来，否则会被读成"异常溢价"或"今天的价"：
+    #   ① 价格日 ≠ 净值基准日（通常是当日净值还没披露）
+    #   ② 价格日距今天 ≥3 天（休市，如国庆/春节，场内根本没有新成交）
+    price_label = (f"{raw['quote_date']} {raw['quote_hm']} 行情快照"
+                   if raw.get("quote_date") else "未知")
+    bits = []
+    if raw.get("stale"):
+        bits.append(f"场内价与净值基准不同日（{raw['quote_date']} vs {raw['nav_date']}），"
+                    "通常是该日净值尚未披露")
+    gap = None
+    qt = raw.get("quote_time") or ""
+    if len(qt) >= 8 and qt[:8].isdigit():
+        try:
+            from datetime import date as _date
+            gap = (_date.today() - _date(int(qt[:4]), int(qt[4:6]), int(qt[6:8]))).days
+        except ValueError:
+            gap = None
+    if gap is not None and gap >= 3:
+        bits.append(f"场内价停在上一个交易日 {raw['quote_date']}（距今 {gap} 天，休市期间无新成交），"
+                    "溢价读的是该日收盘水平")
+    price_note = "；".join(bits)
+
     return {
         "ranked": ranked,
         "sh": raw["sh"],
@@ -508,6 +531,11 @@ def derive_gold(raw: dict, convention: str = "cn") -> dict:
         "lowest_display": (f"{lowest['premium']:+.3f}%" if lowest else "—"),
         "lowest_label": (f"{lowest['code']} {lowest['short_name']}" if lowest else "—"),
         "nav_date": raw["nav_date"],
+        "quote_date": raw.get("quote_date", ""),
+        "price_label": price_label,
+        "stale": raw.get("stale", False),
+        "stale_note": price_note,
+        "price_note": price_note,
         "basis_label": raw["basis_label"],
         "data_status": raw["data_status"],
         "failed": raw["failed"],
