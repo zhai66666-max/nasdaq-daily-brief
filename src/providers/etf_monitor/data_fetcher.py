@@ -95,6 +95,25 @@ def fetch_nasdaq_history_cached():
     return df
 
 
+def fetch_nasdaq_history_chart():
+    """首选数据源：NASDAQ 官方 **chart** 接口（一次请求拿全史，1996 年起）。
+
+    为什么放在 historical 前面：2026-10-08 上午实测，两个接口的更新速度差一天 ——
+    chart 已有 10-07 收盘，historical（tradesTable 那个页面接口）最新还停在 10-06。
+    摘要里那句「当前历史回撤 0.00% …（截至 10-06 收盘）」就是这么来的：
+    10-06 恰好是当时序列的历史最高，回撤于是被算成 0。
+    两个接口的历史收盘实测完全一致（重叠 7776 天，最大差异 0），换源不改口径。
+    """
+    from src.providers.common import us_history
+    b = us_history.fetch_bundle("NDX", assetclass="index")
+    if not b or not b.ok:
+        raise ValueError('NASDAQ chart 无数据')
+    df = b.df[['date', 'open', 'high', 'low', 'close', 'volume']].copy()
+    if len(df) < 100:
+        raise ValueError(f'chart 数据过少（{len(df)} 行）')
+    return df
+
+
 def fetch_nasdaq_history_yfinance():
     """备用数据源1：yfinance（GitHub Actions 美国服务器可用）"""
     import yfinance as yf
@@ -163,7 +182,8 @@ def fetch_nasdaq_history(use_cache=True):
             return df.copy(), name + "(cached)"
 
         errors = []
-        for name, fn in [('nasdaq_api', fetch_nasdaq_history_nasdaq_api),
+        for name, fn in [('nasdaq_chart', fetch_nasdaq_history_chart),
+                         ('nasdaq_api', fetch_nasdaq_history_nasdaq_api),
                          ('yfinance', fetch_nasdaq_history_yfinance),
                          ('cached_csv', fetch_nasdaq_history_cached)]:
             try:
