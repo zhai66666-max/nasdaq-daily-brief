@@ -186,6 +186,9 @@ def fetch_all_etfs(
     # ── Clean up ────────────────────────────────────────────────────────────
     if not adj_close.empty:
         adj_close = adj_close.sort_index()
+        # 先对齐最新交易日（Yahoo 有时还缺当日那根），再 ffill 补齐对其他标的的缺行
+        adj_close, latest_close = align_to_latest_session(
+            adj_close, latest_close, tickers)
         adj_close = adj_close.ffill()  # Forward-fill missing days
 
     logger.info(
@@ -235,6 +238,102 @@ def _fill_from_fallback(
         errors.pop(t, None)                 # 已补齐，从错误清单里移除
         logger.info("  %s ← 兜底源补齐 %d 行（%s 起）",
                     t, len(series), series.index[0].date())
+    return adj_close, latest_close
+
+
+def _extend_from_official(series: pd.Series,
+                          off_close: pd.Series) -> tuple[pd.Series, list[str]]:
+    """用官方**未复权**收盘把复权序列外推到更晚的交易日（比值法）。
+
+    比值法的依据：非除息日，未复权价与复权价的日间涨跌完全相同，
+    所以 `adj_t = adj_{t-1} × close_t / close_{t-1}` 与原复权序列等价；
+    只有正好落在除息日那天会有分红率量级的偏差（远小于「整整少一天」）。
+
+    返回 (新序列, 被补的日期列表)；没有可补的返回原序列与空列表。
+    """
+    if series is None or off_close is None or off_close.empty:
+        return series, []
+    clean = series.dropna()
+    if clean.empty:
+        return series, []
+    last_ok = clean.index[-1]
+    new_pts = off_close.index[off_close.index > last_ok]
+    if len(new_pts) == 0:
+        return series, []
+
+    out = series.copy()
+    val = float(clean.iloc[-1])
+    added: list[str] = []
+    for d in new_pts:
+        pos = off_close.index.get_loc(d)
+        if pos <= 0:
+            continue
+        c_now, c_prev = off_close.iloc[pos], off_close.iloc[pos - 1]
+        if pd.isna(c_now) or pd.isna(c_prev) or not c_prev:
+            continue
+        val = val * float(c_now) / float(c_prev)
+        out.loc[d] = val
+        added.append(str(pd.Timestamp(d).date()))
+    return out, added
+
+
+def align_to_latest_session(
+    adj_close: pd.DataFrame,
+    latest_close: dict[str, float],
+    tickers: list[str],
+) -> tuple[pd.DataFrame, dict[str, float]]:
+    """把各标的的日线对齐到「最新一个已收盘的美股交易日」。
+
+    为什么需要：定时任务在美股收盘后约 5 小时（北京 09:0x）跑，而 Yahoo 的日线
+    有时那一天还没生成 —— 2026-10-08 09:07 那次 run，11 只全停在 10-06，
+    同一封邮件里 01 区块（走 NASDAQ 官方源）已经是 10-07，09 区块却写着
+    「价格 10-06 收盘」，两个区块自相矛盾。这不是「多等一会儿就好」：
+    定时送达时间（北京 08:45~09:45，全年漂移）正好压在 Yahoo 的更新边界上。
+
+    做法：用 NASDAQ 官方 chart 接口（不依赖 Yahoo，云端可达）取同一批标的的
+    最新日线，只把 yfinance 缺的那几根按比值法补上；官方源整体失败就原样返回，
+    不让这一步拖垮雷达。
+    """
+    if adj_close is None or adj_close.empty:
+        return adj_close, latest_close
+    try:
+        from src.providers.common import us_history
+        bundles = us_history.fetch_many(list(tickers), assetclass="etf", max_workers=5)
+    except Exception as exc:                        # noqa: BLE001
+        logger.warning("  [radar] 最新交易日对齐跳过（官方源不可用）：%s", exc)
+        return adj_close, latest_close
+
+    aligned: list[str] = []
+    checked: list[str] = []
+    for t in list(adj_close.columns):
+        b = bundles.get(t)
+        if not b or not b.ok:
+            continue
+        off = b.df.set_index(pd.to_datetime(b.df["date"]))["close"].dropna()
+        # 时区对齐：yfinance 的日线索引可能是 tz-aware，官方源是 tz-naive
+        _tz = getattr(adj_close.index, "tz", None)
+        if _tz is not None and off.index.tz is None:
+            off.index = off.index.tz_localize(_tz)
+        elif _tz is None and off.index.tz is not None:
+            off.index = off.index.tz_localize(None)
+
+        _yf_last = adj_close[t].last_valid_index()
+        checked.append(f"{t} yfinance {str(_yf_last.date()) if _yf_last is not None else '—'}"
+                       f"/官方 {str(off.index[-1].date())}")
+
+        series, added = _extend_from_official(adj_close[t], off)
+        if added:
+            adj_close[t] = series
+            if b.last:
+                latest_close[t] = float(b.last)
+            aligned.append(f"{t}→{added[-1]}")
+
+    if aligned:
+        logger.warning("  [radar] yfinance 日线落后，已按 NASDAQ 官方接口对齐最新交易日：%s",
+                       "、".join(aligned))
+    elif checked:
+        # 没有落后也要留一行：既证明官方通道当时可用，也便于下次一眼看清两个源的日期
+        logger.info("  [radar] 最新交易日核对一致（%d 只）：%s", len(checked), checked[0])
     return adj_close, latest_close
 
 
