@@ -9,19 +9,20 @@
 
 三个必须注意的点：
 
-  1) 这里**不用**「溢价率」。2026-10 实测确定：黄金 ETF 的单位净值按上金所
-     Au99.99 收盘价（15:30）或上海金午盘定盘价（14:30）估值，而场内价格
-     15:00 就定格了 —— 中间这 30 分钟的金价波动被完整记进「价格/净值 − 1」，
-     算出来的不是折溢价。证据：
+  1) 这里**照常给出「溢价率」这一列，但不拿它排序、也不拿它推荐**。2026-10 实测确定：
+     黄金 ETF 的单位净值按上金所 Au99.99 收盘价（15:30）或上海金午盘定盘价（14:30）
+     估值，而场内价格 15:00 就定格了 —— 中间这 30 分钟的金价波动被完整记进
+     「价格/净值 − 1」。证据：
        · 518880 近 19 个交易日：净值日增与 Au99.99 日增的平均绝对偏差 0.0027%
          （净值就是金价 × 0.009509），而价格日增与金价日增的标准差 0.22% ——
          这 0.22% 就是「溢价率」的全部内容，形态是围绕 0 的噪声（均值 −0.057%，
          正溢价天数 9/20）；
        · 09-30 横截面 14 只里 13 只同向为正、离散仅 0.058% —— 共同因子
          （当天尾盘金价方向），不是各家独立的供需折溢价。
-     黄金 ETF 走实物申赎 + T+0，套利几乎无摩擦，真实折溢价长期被压在 ±0.05%，
-     本来就没有可交易空间。拿它排「哪只买得贵」，排出来的是各家的估值时点差
-     与费率，会买错。
+     黄金 ETF 走实物申赎 + T+0，套利几乎无摩擦，真实折溢价长期被压在 ±0.05%。
+     所以这一列的作用只是**核对**（真出了异常能一眼看见），**排序与选基仍看
+     费率、跟踪误差** —— 拿这列排「谁便宜」，排出来的是当天尾盘金价的方向，
+     会买错。
      （注：03 区块的纳指 ETF 溢价 11%~15% 是真的 —— 时点差只有 1~2%，远小于
      溢价本身，且受外汇额度约束无法套利抹平。那边不动。）
 
@@ -565,6 +566,29 @@ def _track_error(nav: dict[str, float], bench: dict[str, float],
     }
 
 
+def nav_at_quote(nav, nav_date: str, quote_date: str, bench: dict[str, float]):
+    """把单位净值从 nav_date「搬」到场内价那天 quote_date，用于算同日溢价率。
+
+    为什么要这一步：净值披露有滞后，直接拿最新已披露净值去比**当日**的场内价，
+    算出来的是期间的金价涨跌幅（10-08 实测全 14 只同向 −1.8%），会被读成
+    「全场大幅折价」。而净值 = 金价 × 固定含金系数（实测日偏差 0.0027%），
+    所以乘一段金价涨跌幅就能把它平移过去。
+
+    返回 (校准后净值 or None, 口径说明)。拿不到就返回 (None, "")
+    —— 调用方据此留空显示「—」，绝不拿伪数充数。
+    """
+    if not nav or not quote_date:
+        return None, ""
+    if nav_date == quote_date:
+        return nav, f"净值 {nav_date}（与场内价同日）"
+    if not nav_date or not bench:
+        return None, ""
+    g_n, g_q = bench.get(nav_date), bench.get(quote_date)
+    if not g_n or not g_q:
+        return None, ""
+    return nav * (g_q / g_n), f"净值 {nav_date} 已按金价校准至 {quote_date}"
+
+
 def build() -> dict:
     """取数 → 算综合费率与年化跟踪误差 → 排名。返回给 derive_gold 的裸数据。"""
     universe = collect_universe()
@@ -630,6 +654,19 @@ def build() -> dict:
         row.update({k: q.get(k) for k in
                     ("price", "prev_close", "change_pct", "amount", "bid1", "ask1",
                      "quote_time")})
+        # 溢价率 = 场内价 /「同一时点的净值」− 1，列出供核对，**不参与排序**。
+        # 净值披露滞后时先按金价涨跌幅校准到场内价当日（见 nav_at_quote）；
+        # 校准不了就留空 —— 直接拿旧净值比当日的价，算出来的是期间金价涨跌，
+        # 会被误读成「全场折价」。
+        _qt = row.get("quote_time") or ""
+        _qd = (f"{_qt[0:4]}-{_qt[4:6]}-{_qt[6:8]}"
+               if len(_qt) >= 8 and _qt[:8].isdigit() else "")
+        _nv_adj, _basis = nav_at_quote(row.get("nav"), row.get("nav_date") or "",
+                                       _qd, benches.get(row["category"]) or {})
+        row["premium"] = (round((row["price"] / _nv_adj - 1) * 100, 3)
+                          if row.get("price") and _nv_adj else None)
+        row["premium_basis"] = _basis
+        row["quote_date"] = _qd
         # 综合费率 = 管理费 + 托管费。两个都拿到才算：只拿到一个说明档案页结构
         # 变了，硬加会得出偏低的假费率，宁可显示「—」。
         f = fees.get(u["code"]) or {}
@@ -688,12 +725,17 @@ def build() -> dict:
                 if len(quote_time) >= 12 and quote_time[8:12].isdigit() else "")
     stale = bool(quote_date and quote_date != (nav_date[5:10] if len(nav_date) >= 10 else ""))
 
+    # 溢价率算出来了几只、口径是怎么来的（用于表格脚注与「—」的原因说明）
+    _prem_rows = [r for r in ok if r.get("premium") is not None]
+
     return {
         "ranked": ok,
         "failed": failed,
         "sh": sh,
         "au": au,
         "nav_date": nav_date,
+        "premium_missing": len(ok) - len(_prem_rows),
+        "premium_basis": (_prem_rows[0].get("premium_basis") if _prem_rows else ""),
         "quote_time": quote_time,
         "quote_date": quote_date,
         "quote_hm": quote_hm,

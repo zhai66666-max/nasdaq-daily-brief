@@ -541,6 +541,13 @@ def derive_gold(raw: dict, convention: str = "cn") -> dict:
                             if e.get("fee_total") is not None else "—")
         e["te_display"] = (f"{e['te']:.3f}%"
                            if e.get("te") is not None else "—")
+        # 溢价率照列，方便核对有没有异常个券。常态 ±0.05% 是估值时点差带来的
+        # 噪声，超过 0.10% 才值得看一眼 —— 也只是「看一眼」，不代表能套利，
+        # 也不参与排序（排序按费率）。
+        e["premium_display"] = (f"{e['premium']:+.3f}%"
+                                if e.get("premium") is not None else "—")
+        e["premium_alert"] = bool(e.get("premium") is not None
+                                  and abs(e["premium"]) > 0.10)
         # 费率档位（表格着色用）：≤0.20 低 / ≤0.30 中 / 其余高
         ft = e.get("fee_total")
         e["fee_level"] = ("low" if ft is not None and ft <= 0.20 else
@@ -605,6 +612,26 @@ def derive_gold(raw: dict, convention: str = "cn") -> dict:
             verdict += (f"。跟踪误差全部落在 {min(te_vals):.3f}%~{max(te_vals):.3f}%，"
                         "跟得都很紧，这一项不构成区分")
 
+    # 折溢价：照实把区间摆出来，同时讲清它是噪声 —— 否则读者会拿它去挑
+    # 「哪只便宜」，而它量的是当天尾盘 30 分钟的金价方向。
+    prem = [r["premium"] for r in ranked if r.get("premium") is not None]
+    premium_note = raw.get("premium_basis", "")
+    if prem:
+        n_pos = sum(1 for p in prem if p > 0)
+        verdict += (f"。本次 {len(prem)} 只的折溢价落在 {min(prem):+.3f}%~"
+                    f"{max(prem):+.3f}%（{n_pos} 只为正），极差只有 "
+                    f"{max(prem) - min(prem):.3f} 个百分点 —— 净值估值时点与"
+                    "场内收盘相差 30 分钟，这列主要还是噪声，不是可套利空间；"
+                    "挑哪只便宜请以费率与跟踪误差为准")
+    else:
+        # 宁可留空也不给伪数：净值披露滞后时用旧净值比当日的价，算出来的是
+        # 期间的金价涨跌幅（今天实测 −1.8% 全 14 只同向），会被读成「全场折价」。
+        verdict += (f"。折溢价本次留空（显示「—」）：净值只披露到 "
+                    f"{raw.get('nav_date') or '未知日期'}，而场内价是 "
+                    f"{raw.get('quote_date') or '未知日期'}，两者不同日，且拿不到"
+                    "两端金价日线做校准 —— 与其给一个由期间涨跌冒充的假折价，"
+                    "不如如实留空")
+
     # 价格位置：距历史最高收盘的回撤。
     # 与费率是两件独立的事 —— 费率说「长期持有谁更省」，回撤说
     # 「这份资产自己离最高点还差多远」。费率再低也挡不住 -28% 的位置。
@@ -645,6 +672,8 @@ def derive_gold(raw: dict, convention: str = "cn") -> dict:
                            if cheapest else "—"),
         "nav_date": raw["nav_date"],
         "quote_date": raw.get("quote_date", ""),
+        "premium_note": premium_note,
+        "premium_missing": raw.get("premium_missing", 0),
         "price_label": price_label,
         "stale": raw.get("stale", False),
         "stale_note": price_note,

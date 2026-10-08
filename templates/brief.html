@@ -647,13 +647,14 @@
 <div>
 <table class="mt" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;font-size:12px;table-layout:fixed;width:100%;">
 <colgroup>
-<col style="width:4%;"><col style="width:8%;"><col style="width:19%;"><col style="width:9%;">
-<col style="width:10%;"><col style="width:10%;"><col style="width:8%;"><col style="width:11%;"><col style="width:12%;"><col style="width:9%;">
+<col style="width:4%;"><col style="width:8%;"><col style="width:17%;"><col style="width:9%;">
+<col style="width:8%;"><col style="width:9%;"><col style="width:8%;"><col style="width:7%;"><col style="width:9%;"><col style="width:11%;"><col style="width:10%;">
 </colgroup>
 <tr class="hd" style="background:{{ theme.panel }};">
 <th style="padding:9px 6px;text-align:left;font-size:11px;color:{{ theme.ink_soft }};border-bottom:2px solid {{ theme.line }};">#</th>
 <th style="padding:9px 6px;text-align:left;font-size:11px;color:{{ theme.ink_soft }};border-bottom:2px solid {{ theme.line }};">类别</th>
 <th style="padding:9px 6px;text-align:left;font-size:11px;color:{{ theme.ink_soft }};border-bottom:2px solid {{ theme.line }};">ETF</th>
+<th style="padding:9px 6px;text-align:right;font-size:11px;color:{{ theme.ink_soft }};border-bottom:2px solid {{ theme.line }};">溢价率</th>
 <th style="padding:9px 6px;text-align:right;font-size:11px;color:{{ theme.ink_soft }};border-bottom:2px solid {{ theme.line }};">综合费率</th>
 <th style="padding:9px 6px;text-align:right;font-size:11px;color:{{ theme.ink_soft }};border-bottom:2px solid {{ theme.line }};">跟踪误差</th>
 <th style="padding:9px 6px;text-align:right;font-size:11px;color:{{ theme.ink_soft }};border-bottom:2px solid {{ theme.line }};">价格</th>
@@ -667,6 +668,7 @@
 <td class="mh" style="padding:8px 6px;font-size:12px;color:{{ theme.ink_mute }};border-bottom:1px solid {{ theme.line }};">{{ loop.index }}</td>
 <td class="mk" style="padding:8px 6px;font-size:11px;color:{{ theme.accent }};border-bottom:1px solid {{ theme.line }};">{{ e.category }}</td>
 <td class="mk" style="padding:8px 6px;font-size:12px;color:{{ theme.ink }};border-bottom:1px solid {{ theme.line }};"><b>{{ e.code }}</b> <span style="color:{{ theme.ink_soft }};">{{ e.short_name }}</span></td>
+<td data-l="溢价率" style="padding:8px 6px;font-size:12px;text-align:right;color:{{ severity.watch if e.premium_alert else theme.ink_soft }};border-bottom:1px solid {{ theme.line }};">{{ e.premium_display }}</td>
 <td data-l="费率" style="padding:8px 6px;font-size:12px;text-align:right;font-weight:700;color:{{ severity.normal if e.fee_level == 'low' else (theme.ink if e.fee_level == 'mid' else theme.ink_soft) }};border-bottom:1px solid {{ theme.line }};">{{ e.fee_display }}</td>
 <td data-l="跟踪误差" style="padding:8px 6px;font-size:12px;text-align:right;color:{{ severity.watch if e.te_alert else theme.ink_soft }};border-bottom:1px solid {{ theme.line }};">{{ e.te_display }}{% if e.te_alert %} ⚠{% endif %}</td>
 <td data-l="价格" style="padding:8px 6px;font-size:12px;text-align:right;color:{{ theme.ink_soft }};border-bottom:1px solid {{ theme.line }};">{{ e.price_display }}</td>
@@ -684,9 +686,9 @@
 {% if gold.price_note %}
 <div style="border-left:3px solid {{ severity.watch }};background:{{ theme.panel }};border-radius:6px;padding:10px 13px;margin-top:8px;font-size:11px;line-height:1.7;color:{{ theme.ink_soft }};">{{ gold.price_note }}</div>
 {% endif %}
-<div style="border-left:3px solid {{ theme.line }};background:{{ theme.panel }};border-radius:6px;padding:10px 13px;margin-top:8px;font-size:11px;line-height:1.7;color:{{ theme.ink_soft }};">本区块<b>不列折溢价率</b>：黄金 ETF 的单位净值按上金所 Au99.99 收盘价（15:30）或上海金午盘定盘价（14:30）估值，而场内价格 15:00 就已定格 —— 中间这 30 分钟的金价波动会被完整记进「价格 ÷ 净值 − 1」。实测 518880 近 19 个交易日，净值日增与金价日增的平均偏差只有 0.0027%（净值即金价 × 0.009509），而价格日增与金价日增的标准差有 0.22% —— 这 0.22% 就是「溢价率」的全部内容，形态是围绕 0 的噪声（20 日均值 −0.057%、正溢价天数 9/20），不是可交易空间：黄金 ETF 走实物申赎 + T+0，套利几乎无摩擦，真实折溢价长期压在 ±0.05% 内。所以这里换成费率（确定性成本）与跟踪误差（跟不跟得住）。纳指 ETF 那 11%~15% 的溢价是真溢价（时点差只有 1~2%、且受外汇额度约束无法套利抹平），见 03 区块。</div>
+<div style="border-left:3px solid {{ theme.line }};background:{{ theme.panel }};border-radius:6px;padding:10px 13px;margin-top:8px;font-size:11px;line-height:1.7;color:{{ theme.ink_soft }};">溢价率这一列<b>照列，但不拿来排序</b>：黄金 ETF 的单位净值按上金所 Au99.99 收盘价（15:30）或上海金午盘定盘价（14:30）估值，而场内价格 15:00 就已定格 —— 中间这 30 分钟的金价波动会被完整记进「价格 ÷ 净值 − 1」。实测 518880 近 19 个交易日，净值日增与金价日增的平均偏差只有 0.0027%（净值即金价 × 0.009509），而价格日增与金价日增的标准差有 0.22% —— 这 0.22% 就是「溢价率」的全部内容，形态是围绕 0 的噪声（20 日均值 −0.057%、正溢价天数 9/20）。黄金 ETF 走实物申赎 + T+0，套利几乎无摩擦，真实折溢价长期压在 ±0.05% 内，所以<b>排序与推荐看综合费率（确定性成本）和跟踪误差（跟不跟得住）</b>；这列留着是用来核对的，真出了异常一眼就能看见（超过 ±0.10% 会标黄）。纳指 ETF 那 11%~15% 的溢价是真溢价（时点差只有 1~2%、且受外汇额度约束无法套利抹平），那边照旧按溢价排序，见 03 区块。</div>
 <div style="font-size:10px;color:{{ theme.ink_mute }};margin-top:8px;line-height:1.7;">
-场内行情：{{ gold.price_label }} · 综合费率 = 管理费率 + 托管费率（东财基金档案页，基金合同口径）· 年化跟踪误差 = std(基金日收益 − 基准日收益) × √252，窗口{{ gold.te_label }}；基准各归各的：上海金 ETF 对上海金基准价（SHAU），其余对上金所 Au99.99 现货 · 类别按基金全称与跟踪标的判定：跟踪上海金（SHAU）为「上海金」，其余为 Au99.99 现货合约 · ⚠ = 成交额低于 1000 万（成交额栏）／ 跟踪误差显著高于同类（跟踪误差栏） · 已剔除黄金股 ETF（标的是股票不是金价）<br>
+场内行情：{{ gold.price_label }} · 溢价率 =（场内价 ÷ 同日净值 − 1）：净值披露滞后时按金价涨跌幅校准到场内价当日（直接拿旧净值比会得到期间的金价涨跌，今天实测会把 −1.8% 误读成「全场折价」），校准所需金价缺数据时留空显示「—」{% if gold.premium_note %} · 本次口径：{{ gold.premium_note }}{% endif %}{% if gold.premium_missing %} · {{ gold.premium_missing }} 只无从校准故留空{% endif %} · 净值按 15:30 的 Au99.99 / 14:30 的上海金估值、场内价 15:00 定格，两者仍相差约 30 分钟，所以这列含错位噪声，<b>只作核对、不参与排序</b>（超过 ±0.10% 标黄）· 综合费率 = 管理费率 + 托管费率（东财基金档案页，基金合同口径），排序第一依据 · 年化跟踪误差 = std(基金日收益 − 基准日收益) × √252，窗口{{ gold.te_label }}；基准各归各的：上海金 ETF 对上海金基准价（SHAU），其余对上金所 Au99.99 现货 · 类别按基金全称与跟踪标的判定：跟踪上海金（SHAU）为「上海金」，其余为 Au99.99 现货合约 · ⚠ = 成交额低于 1000 万（成交额栏）／ 跟踪误差显著高于同类（跟踪误差栏） · 已剔除黄金股 ETF（标的是股票不是金价）<br>
 距高回撤 = 最新收盘 / 历史最高收盘 − 1，用<b>前复权</b>日线（截至 {{ gold.dd_as_of }}）逐只各算，与 04 区块同口径：取收盘价而非盘中最高价，避免单日长影线造出假高点；前复权避免除息跳空把回撤算小。各只上市时间不同，高点窗口由各自动态确定{% if gold.dd_cached_count %} · 其中 {{ gold.dd_cached_count }} 只当日取数失败、回落缓存的日线，其回撤截至日早于 {{ gold.dd_as_of }}{% endif %}
 </div>
 {% if gold.failed %}
@@ -706,7 +708,7 @@
 黄金 ETF：腾讯财经行情 + 东方财富基金档案（跟踪标的 / 管理费率 / 托管费率）+ 天天基金全量净值（算跟踪误差）+ 上金所金价日线（跟踪误差的基准）+ 东财历史日线（前复权，算距高回撤）· 跟踪误差窗口见 13 区块<br>
 指数行情：{{ nasdaq100.ix.data_source if nasdaq100 else '—' }} · 成分股：{{ nasdaq100.components_source if nasdaq100 else '—' }} · 全球回撤：{{ radar.data_source if radar else '—' }}<br>
 <b style="color:{{ theme.ink_soft }};">口径：</b>页头指数、05 宏观报价、08 成分股涨跌榜、09 全球价格与涨跌为<b style="color:{{ theme.ink_soft }};">盘面快照</b>（{{ summary.ndx_bar_label or '最新' }}，随行情变动）；52 周收盘区间与分位、50/200 日均线、RSI、20 日均量、以及<b style="color:{{ theme.ink_soft }};">全部历史回撤</b>（02 纳指 / 10 全球，各自区块内标注基准日）均为<b style="color:{{ theme.ink_soft }};">收盘口径</b>，同一封邮件内互不矛盾<br>
-回撤 = 当前收盘价 / 历史最高收盘价 − 1 · 历史回撤分位基于 expanding-window，无未来数据泄露 · 纳指 ETF 溢价率基于 T-1 净值，非实时 IOPV · 黄金 ETF 不给折溢价率（净值估值时点与场内收盘时点相差 30 分钟，两者混在一起无法分离），改用综合费率与年化跟踪误差，口径见 13 区块<br>
+回撤 = 当前收盘价 / 历史最高收盘价 − 1 · 历史回撤分位基于 expanding-window，无未来数据泄露 · 纳指 ETF 溢价率基于 T-1 净值，非实时 IOPV，且为真溢价（受外汇额度约束，04 区块）· 黄金 ETF 的溢价率含净值估值时点与场内收盘约 30 分钟的错位，不是可套利空间，故只作核对、排序按综合费率与年化跟踪误差，口径见 13 区块<br>
 {% if ai.analysis_sections or ai.commentary %}AI 解读由 DeepSeek 生成，仅作参考 · {% endif %}本简报不构成投资建议，投资决策请结合自身情况独立判断<br>
 生成时间 {{ meta.run_ts }}（北京时间） · 由 nasdaq-daily-brief 自动生成
 </div>
