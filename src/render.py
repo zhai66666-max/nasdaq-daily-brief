@@ -168,7 +168,7 @@ def build_context(results: dict[str, pipeline.SourceResult],
     if ai_out and (ai_out.get("analysis_sections") or ai_out.get("commentary")):
         toc.append(("ai", "12 AI 深度分析"))
     if gd_data:
-        toc.append(("gold", "13 黄金 ETF 溢价排名"))
+        toc.append(("gold", "13 黄金 ETF 选择"))
 
     return {
         "brand": display["brand"],

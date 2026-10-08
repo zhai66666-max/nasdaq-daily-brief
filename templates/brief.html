@@ -627,16 +627,16 @@
 
 {% if gold and sections.gold_etf %}
 <!-- ══════════ 13 黄金 ETF 溢价排名 ══════════ -->
-{{ sec('13', '黄金 ETF 溢价排名', gold.data_status ~ ' · 场内价 ' ~ gold.price_label ~ ' · 净值基准 ' ~ gold.basis_label) }}
+{{ sec('13', '黄金 ETF 选择', gold.data_status ~ ' · 行情 ' ~ gold.price_label ~ ' · 跟踪误差 ' ~ gold.te_label) }}
 <tr><td style="padding:0 30px 10px;">
 <table class="m4" width="100%" cellpadding="0" cellspacing="0"><tr>
-{{ metric('上海金最优选', (gold.sh_best.short_name if gold.sh_best else '—'),
-          ((gold.sh_best.code ~ '　溢价 ' ~ gold.sh_best.premium_display ~ '　成交额 ' ~ gold.sh_best.amount_display) if gold.sh_best else '组内无溢价 ≤' ~ gold.premium_ok_max ~ '% 且流动性足够的标的'),
+{{ metric('上海金最省', (gold.sh_best.short_name if gold.sh_best else '—'),
+          ((gold.sh_best.code ~ '　费率 ' ~ gold.sh_best.fee_display ~ '　成交额 ' ~ gold.sh_best.amount_display) if gold.sh_best else '组内无费率数据或流动性不足'),
           (severity.normal if gold.sh_best else severity.watch)) }}
-{{ metric('黄金最优选', (gold.au_best.short_name if gold.au_best else '—'),
-          ((gold.au_best.code ~ '　溢价 ' ~ gold.au_best.premium_display ~ '　成交额 ' ~ gold.au_best.amount_display) if gold.au_best else '组内无溢价 ≤' ~ gold.premium_ok_max ~ '% 且流动性足够的标的'),
+{{ metric('黄金最省', (gold.au_best.short_name if gold.au_best else '—'),
+          ((gold.au_best.code ~ '　费率 ' ~ gold.au_best.fee_display ~ '　成交额 ' ~ gold.au_best.amount_display) if gold.au_best else '组内无费率数据或流动性不足'),
           (severity.normal if gold.au_best else severity.watch)) }}
-{{ metric('全场最低溢价', gold.lowest_display, gold.lowest_label, severity.normal) }}
+{{ metric('全场最低费率', gold.cheapest_display, ((gold.cheapest_label ~ '　区间 ' ~ gold.fee_range) if gold.cheapest else '费率未取到'), severity.normal) }}
 {{ metric('距历史最高回撤', gold.dd_median_display,
           ('高点 ' ~ gold.dd_high_date_short ~ ' · ' ~ gold.dd_count ~ ' 只区间 ' ~ gold.dd_span) if gold.dd_median is not none else '历史日线未取到',
           (severity.deep if (gold.dd_median is not none and gold.dd_median <= -20) else (severity.watch if gold.dd_median is not none else theme.ink_soft)),
@@ -647,33 +647,33 @@
 <div>
 <table class="mt" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;font-size:12px;table-layout:fixed;width:100%;">
 <colgroup>
-<col style="width:4%;"><col style="width:7%;"><col style="width:19%;"><col style="width:10%;">
-<col style="width:10%;"><col style="width:9%;"><col style="width:11%;"><col style="width:11%;"><col style="width:10%;"><col style="width:9%;">
+<col style="width:4%;"><col style="width:8%;"><col style="width:19%;"><col style="width:9%;">
+<col style="width:10%;"><col style="width:10%;"><col style="width:8%;"><col style="width:11%;"><col style="width:12%;"><col style="width:9%;">
 </colgroup>
 <tr class="hd" style="background:{{ theme.panel }};">
 <th style="padding:9px 6px;text-align:left;font-size:11px;color:{{ theme.ink_soft }};border-bottom:2px solid {{ theme.line }};">#</th>
 <th style="padding:9px 6px;text-align:left;font-size:11px;color:{{ theme.ink_soft }};border-bottom:2px solid {{ theme.line }};">类别</th>
 <th style="padding:9px 6px;text-align:left;font-size:11px;color:{{ theme.ink_soft }};border-bottom:2px solid {{ theme.line }};">ETF</th>
+<th style="padding:9px 6px;text-align:right;font-size:11px;color:{{ theme.ink_soft }};border-bottom:2px solid {{ theme.line }};">综合费率</th>
+<th style="padding:9px 6px;text-align:right;font-size:11px;color:{{ theme.ink_soft }};border-bottom:2px solid {{ theme.line }};">跟踪误差</th>
 <th style="padding:9px 6px;text-align:right;font-size:11px;color:{{ theme.ink_soft }};border-bottom:2px solid {{ theme.line }};">价格</th>
-<th style="padding:9px 6px;text-align:right;font-size:11px;color:{{ theme.ink_soft }};border-bottom:2px solid {{ theme.line }};">溢价率</th>
 <th style="padding:9px 6px;text-align:right;font-size:11px;color:{{ theme.ink_soft }};border-bottom:2px solid {{ theme.line }};">涨跌</th>
 <th style="padding:9px 6px;text-align:right;font-size:11px;color:{{ theme.ink_soft }};border-bottom:2px solid {{ theme.line }};">距高回撤</th>
 <th style="padding:9px 6px;text-align:right;font-size:11px;color:{{ theme.ink_soft }};border-bottom:2px solid {{ theme.line }};">成交额</th>
 <th style="padding:9px 6px;text-align:right;font-size:11px;color:{{ theme.ink_soft }};border-bottom:2px solid {{ theme.line }};">买卖价差</th>
-<th style="padding:9px 6px;text-align:center;font-size:11px;color:{{ theme.ink_soft }};border-bottom:2px solid {{ theme.line }};">状态</th>
 </tr>
 {% for e in gold.ranked %}
 <tr>
 <td class="mh" style="padding:8px 6px;font-size:12px;color:{{ theme.ink_mute }};border-bottom:1px solid {{ theme.line }};">{{ loop.index }}</td>
 <td class="mk" style="padding:8px 6px;font-size:11px;color:{{ theme.accent }};border-bottom:1px solid {{ theme.line }};">{{ e.category }}</td>
 <td class="mk" style="padding:8px 6px;font-size:12px;color:{{ theme.ink }};border-bottom:1px solid {{ theme.line }};"><b>{{ e.code }}</b> <span style="color:{{ theme.ink_soft }};">{{ e.short_name }}</span></td>
+<td data-l="费率" style="padding:8px 6px;font-size:12px;text-align:right;font-weight:700;color:{{ severity.normal if e.fee_level == 'low' else (theme.ink if e.fee_level == 'mid' else theme.ink_soft) }};border-bottom:1px solid {{ theme.line }};">{{ e.fee_display }}</td>
+<td data-l="跟踪误差" style="padding:8px 6px;font-size:12px;text-align:right;color:{{ severity.watch if e.te_alert else theme.ink_soft }};border-bottom:1px solid {{ theme.line }};">{{ e.te_display }}{% if e.te_alert %} ⚠{% endif %}</td>
 <td data-l="价格" style="padding:8px 6px;font-size:12px;text-align:right;color:{{ theme.ink_soft }};border-bottom:1px solid {{ theme.line }};">{{ e.price_display }}</td>
-<td data-l="溢价" style="padding:8px 6px;font-size:12px;text-align:right;font-weight:700;color:{{ tone('up') if e.premium <= gold.premium_ok_max else severity.watch }};border-bottom:1px solid {{ theme.line }};">{{ e.premium_display }}</td>
 <td data-l="涨跌" style="padding:8px 6px;font-size:12px;text-align:right;color:{{ e.change_color }};border-bottom:1px solid {{ theme.line }};">{{ e.change_display }}</td>
 <td data-l="距高" style="padding:8px 6px;font-size:12px;text-align:right;color:{{ e.dd_color }};border-bottom:1px solid {{ theme.line }};">{{ e.dd_display }}</td>
 <td data-l="额" style="padding:8px 6px;font-size:12px;text-align:right;color:{{ theme.ink_soft }};border-bottom:1px solid {{ theme.line }};">{{ e.amount_display }}{% if e.low_liquidity %} <span style="color:{{ severity.watch }};">⚠</span>{% endif %}</td>
 <td data-l="价差" style="padding:8px 6px;font-size:12px;text-align:right;color:{{ theme.ink_mute }};border-bottom:1px solid {{ theme.line }};">{{ e.spread_display }}</td>
-<td data-l="状态" style="padding:8px 6px;font-size:11px;text-align:center;color:{{ theme.ink_soft }};border-bottom:1px solid {{ theme.line }};">{{ e.premium_level.emoji }} {{ e.premium_level.label }}</td>
 </tr>
 {% endfor %}
 </table>
@@ -684,8 +684,9 @@
 {% if gold.price_note %}
 <div style="border-left:3px solid {{ severity.watch }};background:{{ theme.panel }};border-radius:6px;padding:10px 13px;margin-top:8px;font-size:11px;line-height:1.7;color:{{ theme.ink_soft }};">{{ gold.price_note }}</div>
 {% endif %}
+<div style="border-left:3px solid {{ theme.line }};background:{{ theme.panel }};border-radius:6px;padding:10px 13px;margin-top:8px;font-size:11px;line-height:1.7;color:{{ theme.ink_soft }};">本区块<b>不列折溢价率</b>：黄金 ETF 的单位净值按上金所 Au99.99 收盘价（15:30）或上海金午盘定盘价（14:30）估值，而场内价格 15:00 就已定格 —— 中间这 30 分钟的金价波动会被完整记进「价格 ÷ 净值 − 1」。实测 518880 近 19 个交易日，净值日增与金价日增的平均偏差只有 0.0027%（净值即金价 × 0.009509），而价格日增与金价日增的标准差有 0.22% —— 这 0.22% 就是「溢价率」的全部内容，形态是围绕 0 的噪声（20 日均值 −0.057%、正溢价天数 9/20），不是可交易空间：黄金 ETF 走实物申赎 + T+0，套利几乎无摩擦，真实折溢价长期压在 ±0.05% 内。所以这里换成费率（确定性成本）与跟踪误差（跟不跟得住）。纳指 ETF 那 11%~15% 的溢价是真溢价（时点差只有 1~2%、且受外汇额度约束无法套利抹平），见 03 区块。</div>
 <div style="font-size:10px;color:{{ theme.ink_mute }};margin-top:8px;line-height:1.7;">
-场内行情：{{ gold.price_label }} · 净值基准：{{ gold.basis_label }}（取数时最新<b>已披露</b>单位净值，可能滞后于场内价）· 类别按基金全称与跟踪标的判定：跟踪上海金（SHAU）为「上海金」，其余为 Au99.99 现货合约 · ⚠ = 成交额低于 1000 万 · 已剔除黄金股 ETF（标的是股票不是金价）<br>
+场内行情：{{ gold.price_label }} · 综合费率 = 管理费率 + 托管费率（东财基金档案页，基金合同口径）· 年化跟踪误差 = std(基金日收益 − 基准日收益) × √252，窗口{{ gold.te_label }}；基准各归各的：上海金 ETF 对上海金基准价（SHAU），其余对上金所 Au99.99 现货 · 类别按基金全称与跟踪标的判定：跟踪上海金（SHAU）为「上海金」，其余为 Au99.99 现货合约 · ⚠ = 成交额低于 1000 万（成交额栏）／ 跟踪误差显著高于同类（跟踪误差栏） · 已剔除黄金股 ETF（标的是股票不是金价）<br>
 距高回撤 = 最新收盘 / 历史最高收盘 − 1，用<b>前复权</b>日线（截至 {{ gold.dd_as_of }}）逐只各算，与 04 区块同口径：取收盘价而非盘中最高价，避免单日长影线造出假高点；前复权避免除息跳空把回撤算小。各只上市时间不同，高点窗口由各自动态确定{% if gold.dd_cached_count %} · 其中 {{ gold.dd_cached_count }} 只当日取数失败、回落缓存的日线，其回撤截至日早于 {{ gold.dd_as_of }}{% endif %}
 </div>
 {% if gold.failed %}
@@ -702,10 +703,10 @@
 <div style="font-size:10px;color:{{ theme.ink_mute }};line-height:1.9;">
 <b style="color:{{ theme.ink_soft }};">数据来源与口径</b><br>
 纳指历史回撤：{{ (etf_monitor.ndx_source ~ '（' ~ etf_monitor.ndx_count ~ ' 条日线' ~ ('，截至 ' ~ etf_monitor.dd_as_of_short if etf_monitor.dd_as_of_short else '') ~ '）') if etf_monitor else '—' }} · 国内 ETF：腾讯财经行情 + 东方财富 T-1 净值<br>
-黄金 ETF：腾讯财经行情 + 东方财富基金档案（跟踪标的 / 净值）+ 东财历史日线（前复权，算距高回撤）· 净值基准日见 13 区块<br>
+黄金 ETF：腾讯财经行情 + 东方财富基金档案（跟踪标的 / 管理费率 / 托管费率）+ 天天基金全量净值（算跟踪误差）+ 上金所金价日线（跟踪误差的基准）+ 东财历史日线（前复权，算距高回撤）· 跟踪误差窗口见 13 区块<br>
 指数行情：{{ nasdaq100.ix.data_source if nasdaq100 else '—' }} · 成分股：{{ nasdaq100.components_source if nasdaq100 else '—' }} · 全球回撤：{{ radar.data_source if radar else '—' }}<br>
 <b style="color:{{ theme.ink_soft }};">口径：</b>页头指数、05 宏观报价、08 成分股涨跌榜、09 全球价格与涨跌为<b style="color:{{ theme.ink_soft }};">盘面快照</b>（{{ summary.ndx_bar_label or '最新' }}，随行情变动）；52 周收盘区间与分位、50/200 日均线、RSI、20 日均量、以及<b style="color:{{ theme.ink_soft }};">全部历史回撤</b>（02 纳指 / 10 全球，各自区块内标注基准日）均为<b style="color:{{ theme.ink_soft }};">收盘口径</b>，同一封邮件内互不矛盾<br>
-回撤 = 当前收盘价 / 历史最高收盘价 − 1 · 历史回撤分位基于 expanding-window，无未来数据泄露 · 纳指 ETF 溢价率基于 T-1 净值，非实时 IOPV · 黄金 ETF 溢价率基于 13 区块标注的净值基准日（最新已披露净值）<br>
+回撤 = 当前收盘价 / 历史最高收盘价 − 1 · 历史回撤分位基于 expanding-window，无未来数据泄露 · 纳指 ETF 溢价率基于 T-1 净值，非实时 IOPV · 黄金 ETF 不给折溢价率（净值估值时点与场内收盘时点相差 30 分钟，两者混在一起无法分离），改用综合费率与年化跟踪误差，口径见 13 区块<br>
 {% if ai.analysis_sections or ai.commentary %}AI 解读由 DeepSeek 生成，仅作参考 · {% endif %}本简报不构成投资建议，投资决策请结合自身情况独立判断<br>
 生成时间 {{ meta.run_ts }}（北京时间） · 由 nasdaq-daily-brief 自动生成
 </div>

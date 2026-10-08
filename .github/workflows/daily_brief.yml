@@ -122,6 +122,7 @@ jobs:
                   "src.providers.etf_monitor.data_fetcher", "src.providers.etf_monitor.drawdown",
                   "src.providers.etf_monitor.etf", "src.providers.etf_monitor.ranking",
                   "src.providers.etf_monitor.database",
+                  "src.providers.gold_etf",
                   "src.providers.drawdown_radar.config", "src.providers.drawdown_radar.data_fetcher",
                   "src.providers.drawdown_radar.drawdown", "src.providers.drawdown_radar.signal",
                   "src.providers.drawdown_radar.state", "src.providers.nasdaq100.core"]

@@ -53,7 +53,7 @@ sections:
   global_watch: true         # 10 全球重点观察
   global_alerts: true        # 11 全球回撤新信号
   ai: true                   # 12 AI 深度分析
-  gold_etf: true             # 13 黄金 / 上海金 ETF 溢价排名
+  gold_etf: true             # 13 黄金 / 上海金 ETF 选择（费率 × 跟踪误差）
 
 # ── 阈值与文案 ───────────────────────────────────────────────────────────────
 thresholds:

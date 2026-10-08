@@ -247,7 +247,9 @@ def collect_gold_etf() -> dict:
     from src.providers import gold_etf
 
     data = gold_etf.build()
-    logger.info("  [gold_etf] %s｜净值基准 %s", data["data_status"], data["basis_label"])
+    logger.info("  [gold_etf] %s｜跟踪误差窗口 %s｜费率缓存命中 %d",
+                data["data_status"], data.get("te_label", ""),
+                data.get("fee_cached", 0))
     return data
 
 
@@ -257,7 +259,7 @@ SOURCES = [
     ("etf_monitor",    "纳指回撤 × ETF溢价", collect_etf_monitor),
     ("drawdown_radar", "全球回撤雷达",       collect_drawdown_radar),
     ("nasdaq100",      "纳指深度数据",       collect_nasdaq100),
-    ("gold_etf",       "黄金ETF溢价",        collect_gold_etf),
+    ("gold_etf",       "黄金ETF选基",        collect_gold_etf),
 ]
 
 

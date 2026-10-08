@@ -1,27 +1,48 @@
-"""黄金 / 上海金 ETF 溢价排名 —— 简报第 13 区块的数据源。
+"""黄金 / 上海金 ETF 选择指标 —— 简报第 13 区块的数据源。
 
 为什么单独做：03 区块是国内**纳指** ETF 的溢价排名，口径已经稳定跑很久了。
-黄金这边的差别只有标的与阈值，公式、排序、降级逻辑全部照抄 etf_monitor，
-避免两套实现日后漂移（etf_monitor/etf.py 是唯一口径来源）。
+黄金这边标的、指标、阈值全都不一样，所以单独一套。
 
-  溢价率 = (场内价格 / 单位净值 - 1) × 100%
-  排序：溢价率升序 → 成交额降序 → 买卖价差升序
+  综合费率   = 管理费率 + 托管费率（每年 %，基金合同定的）
+  年化跟踪误差 = std(基金日收益 − 基准日收益) × √252（近 60 个交易日）
+  排序：综合费率升序 → 成交额降序 → 跟踪误差升序
 
-两个必须注意的点：
-  1) 分类不能看简称。518600「金ETF广发」的全称是「广发**上海金**交易型开放式
+三个必须注意的点：
+
+  1) 这里**不用**「溢价率」。2026-10 实测确定：黄金 ETF 的单位净值按上金所
+     Au99.99 收盘价（15:30）或上海金午盘定盘价（14:30）估值，而场内价格
+     15:00 就定格了 —— 中间这 30 分钟的金价波动被完整记进「价格/净值 − 1」，
+     算出来的不是折溢价。证据：
+       · 518880 近 19 个交易日：净值日增与 Au99.99 日增的平均绝对偏差 0.0027%
+         （净值就是金价 × 0.009509），而价格日增与金价日增的标准差 0.22% ——
+         这 0.22% 就是「溢价率」的全部内容，形态是围绕 0 的噪声（均值 −0.057%，
+         正溢价天数 9/20）；
+       · 09-30 横截面 14 只里 13 只同向为正、离散仅 0.058% —— 共同因子
+         （当天尾盘金价方向），不是各家独立的供需折溢价。
+     黄金 ETF 走实物申赎 + T+0，套利几乎无摩擦，真实折溢价长期被压在 ±0.05%，
+     本来就没有可交易空间。拿它排「哪只买得贵」，排出来的是各家的估值时点差
+     与费率，会买错。
+     （注：03 区块的纳指 ETF 溢价 11%~15% 是真的 —— 时点差只有 1~2%，远小于
+     溢价本身，且受外汇额度约束无法套利抹平。那边不动。）
+
+  2) 分类不能看简称。518600「金ETF广发」的全称是「广发**上海金**交易型开放式
      证券投资基金」，跟踪 SHAU；名字里带「黄金」的才多是 Au99.99。判断一律走
      FundMNDetailInformation 的 INDEXCODE / FULLNAME。
-  2) 阈值不能沿用纳指那套 2%。黄金 ETF 溢价常年只有 ±0.2%，用 2% 分档会把
-     14 只全塞进同一档，等于没有分档。
+
+  3) 跟踪误差的基准各归各的：上海金 ETF 对上海金基准价（SHAU），
+     Au99.99 ETF 对上金所 Au99.99 现货。用错基准会把「基准差」当成「跟踪差」，
+     实测两者日偏差约 0.14%，比真实的跟踪误差还大。
 """
 from __future__ import annotations
 
 import json
 import logging
 import re
+import statistics
 import subprocess
 import time
 import urllib.parse
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import requests
@@ -95,15 +116,43 @@ def _save_hist_cache() -> None:
     except OSError as exc:
         logger.debug("  [gold] 历史缓存写入失败：%s", exc)
 
-# 黄金 ETF 溢价分级（百分点）：负值是折价，单独一档。
-PREMIUM_LEVELS = [
-    {"max": 0,    "label": "折价",   "emoji": "🟢"},
-    {"max": 0.10, "label": "极低",   "emoji": "🟢"},
-    {"max": 0.30, "label": "偏低",   "emoji": "🟢"},
-    {"max": 0.60, "label": "正常",   "emoji": "🟡"},
-    {"max": 1.00, "label": "偏高",   "emoji": "🟠"},
-    {"max": 9.99, "label": "高溢价", "emoji": "🔴"},
-]
+
+# 费率缓存：{code: {"mgmt": 0.5, "cust": 0.1}}。费率写在基金合同里、极少变动，
+# 缓存下来就不用每天为同一批标的多打 14 次档案页。
+_FEE_CACHE_PATH = Path(__file__).resolve().parents[2] / "data" / "gold_fee_cache.json"
+_FEE_CACHE: dict[str, dict] = {}
+_FEE_CACHE_DIRTY: set[str] = set()
+
+
+def _load_fee_cache() -> None:
+    global _FEE_CACHE
+    try:
+        _FEE_CACHE = json.loads(_FEE_CACHE_PATH.read_text("utf-8")) or {}
+    except (OSError, json.JSONDecodeError):
+        _FEE_CACHE = {}
+
+
+def _save_fee_cache() -> None:
+    if not _FEE_CACHE_DIRTY:
+        return
+    try:
+        _FEE_CACHE_PATH.parent.mkdir(parents=True, exist_ok=True)
+        _FEE_CACHE_PATH.write_text(
+            json.dumps(_FEE_CACHE, ensure_ascii=False, indent=1, sort_keys=True),
+            encoding="utf-8")
+    except OSError as exc:
+        logger.debug("  [gold] 费率缓存写入失败：%s", exc)
+
+
+# 跟踪误差的基准：类别 → (东财 secid, 展示名)。secid 前缀 118 是上金所现货板块。
+# 上海金基准价（SHAU）是 10:15 / 14:30 两次集中定盘产生的价；
+# Au99.99 是连续竞价、收盘价在 15:30。两者日偏差约 0.14%，所以必须各归各的。
+GOLD_BENCH = {
+    "上海金": ("118.SHAU", "上海金基准价"),
+    "黄金": ("118.AU9999", "上金所 Au99.99"),
+}
+TRACK_WINDOW = 60        # 跟踪误差窗口（交易日）
+MIN_TRACK_DAYS = 20      # 低于这个天数不出跟踪误差，免得 5 天样本抖出一个假排名
 
 SEARCH_KEYS = ["黄金", "上海金", "黄金ETF", "金ETF", "上海金ETF"]
 
@@ -289,8 +338,8 @@ def _secid(code: str) -> str:
     return ("1." if code.startswith(("5", "6")) else "0.") + code
 
 
-def _hist_get(url: str, *, attempts: int = 2, timeout: int = 25):
-    """取历史日线：**curl 优先，失败再走 requests** —— 两条通道缺一不可。
+def _hist_get(url: str, *, attempts: int = 2, timeout: int = 25, referer: str = ""):
+    """带重试的双通道 GET（**curl 优先，失败再走 requests**）—— 两条通道缺一不可。
 
     两个运行环境的失败面正好互补，各封一边，所以不能只留一条：
 
@@ -306,13 +355,15 @@ def _hist_get(url: str, *, attempts: int = 2, timeout: int = 25):
     所以这里两条都试，谁通用谁。
     """
     # ① curl（本地沙箱的可用通道）
+    cmd = ["curl", "-s", "--connect-timeout", "10", "--max-time", str(timeout),
+           "-H", f"User-Agent: {HEADERS['User-Agent']}"]
+    if referer:
+        cmd += ["-H", f"Referer: {referer}"]
+    cmd.append(url)
     for i in range(attempts):
         try:
-            proc = subprocess.run(
-                ["curl", "-s", "--connect-timeout", "10", "--max-time", str(timeout),
-                 "-H", f"User-Agent: {HEADERS['User-Agent']}", url],
-                capture_output=True, text=True, timeout=timeout + 5,
-            )
+            proc = subprocess.run(cmd, capture_output=True, text=True,
+                                  timeout=timeout + 5)
         except (OSError, subprocess.SubprocessError) as exc:
             logger.debug("  [gold] curl 失败 %s: %s", url[:60], exc)
             proc = None
@@ -322,9 +373,12 @@ def _hist_get(url: str, *, attempts: int = 2, timeout: int = 25):
             time.sleep(0.6)
 
     # ② requests 兜底（GitHub Actions 的可用通道）
+    hdrs = dict(HEADERS)
+    if referer:
+        hdrs["Referer"] = referer
     for i in range(attempts):
         try:
-            r = requests.get(url, headers=HEADERS, timeout=timeout)
+            r = requests.get(url, headers=hdrs, timeout=timeout)
             if r.status_code == 200 and (r.text or "").strip():
                 logger.debug("  [gold] curl 未取到，requests 兜底成功：%s", url[:60])
                 return r.text
@@ -394,26 +448,136 @@ def fetch_hist_stats(code: str) -> dict:
     return {}
 
 
-def _classify(premium: float) -> dict:
-    for lv in PREMIUM_LEVELS:
-        if premium <= lv["max"]:
-            return lv
-    return PREMIUM_LEVELS[-1]
+# ── 选择指标：综合费率 + 年化跟踪误差 ─────────────────────────────────────────
+
+def _fee_f10(code: str) -> dict:
+    """基金档案页 → 管理费率 / 托管费率（每年 %）。
+
+    页面里形如 `<th>管理费率</th><td>0.50%（每年）</td>`。返回 {"mgmt": x, "cust": y}，
+    缺哪个就少哪个 —— 调用方要两个都在才敢加总（只拿到一个说明页面结构变了，
+    硬加会得出偏低的假费率）。
+    """
+    txt = _hist_get(f"https://fundf10.eastmoney.com/jbgk_{code}.html",
+                    referer="https://fund.eastmoney.com/", timeout=20, attempts=2)
+    if not txt:
+        return {}
+    out: dict[str, float] = {}
+    for label, key in (("管理费率", "mgmt"), ("托管费率", "cust")):
+        m = re.search(re.escape(label) + r"</th>\s*<td[^>]*>(.*?)</td>", txt, re.S)
+        if not m:
+            continue
+        plain = re.sub(r"<[^>]+>", "", m.group(1))
+        val = re.search(r"([\d.]+)", plain)
+        if val:
+            try:
+                out[key] = float(val.group(1))
+            except ValueError:
+                pass
+    return out
+
+
+def _nav_full(code: str, keep: int = 260) -> dict[str, float]:
+    """全量单位净值序列 {YYYY-MM-DD: 单位净值}，只保留最近 keep 条。
+
+    走天天基金的 pingzhongdata（一次请求拿全史 3000+ 个点、约 550KB），
+    而不是 F10 的 lsjz —— 那个接口 pageSize 被硬限制在 20 条（实测传 40/90
+    都只回 20 条），要凑够 60 日窗口得翻 3 次页，14 只就是 42 次请求。
+
+    ⚠ 时间戳 x 是「北京时间零点」对应的毫秒 epoch，按 UTC 还原会整体退一天
+    （09-30 的净值被标成 09-29），必须按 UTC+8 还原。
+    """
+    txt = _hist_get(f"https://fund.eastmoney.com/pingzhongdata/{code}.js",
+                    referer="https://fund.eastmoney.com/", timeout=30, attempts=2)
+    if not txt:
+        return {}
+    m = re.search(r"var Data_netWorthTrend\s*=\s*(\[.*?\]);", txt, re.S)
+    if not m:
+        return {}
+    try:
+        arr = json.loads(m.group(1))
+    except json.JSONDecodeError:
+        return {}
+    if not isinstance(arr, list):
+        return {}
+    out: dict[str, float] = {}
+    for it in arr[-keep:]:
+        try:
+            ts = int(it["x"]) / 1000
+            d = datetime.fromtimestamp(ts, tz=timezone(timedelta(hours=8)))
+            val = it["y"]
+            if val:
+                out[d.strftime("%Y-%m-%d")] = float(val)
+        except (KeyError, TypeError, ValueError):
+            continue
+    return out
+
+
+def _bench_series(cat: str) -> dict[str, float]:
+    """基准金价日线 {日期: 收盘价}。类别没有对应基准时返回 {}。"""
+    secid = (GOLD_BENCH.get(cat) or ("", ""))[0]
+    if not secid:
+        return {}
+    txt = _hist_get("https://push2his.eastmoney.com/api/qt/stock/kline/get"
+                    f"?secid={secid}&fields1=f1&fields2=f51,f53"
+                    "&klt=101&fqt=0&beg=20250101&end=20500101",
+                    timeout=25, attempts=2)
+    if not txt:
+        return {}
+    try:
+        klines = (json.loads(txt).get("data") or {}).get("klines") or []
+    except json.JSONDecodeError:
+        return {}
+    out: dict[str, float] = {}
+    for line in klines:
+        parts = line.split(",")
+        if len(parts) < 2:
+            continue
+        try:
+            out[parts[0]] = float(parts[1])
+        except ValueError:
+            continue
+    return out
+
+
+def _track_error(nav: dict[str, float], bench: dict[str, float],
+                 window: int = TRACK_WINDOW) -> dict:
+    """年化跟踪误差 %：std(基金日收益 − 基准日收益) × √252。
+
+    口径即行业通用的日频超额收益标准差年化。基准与基金各有一套交易日历，
+    先取交集日期再算，避免把「只有一边有数据」的日子当成 0 收益。
+    """
+    days = sorted(set(nav) & set(bench))
+    if len(days) < MIN_TRACK_DAYS + 1:
+        return {}
+    days = days[-(window + 1):]
+    excess: list[float] = []
+    for i in range(1, len(days)):
+        a_nav, b_nav = nav[days[i - 1]], nav[days[i]]
+        a_gld, b_gld = bench[days[i - 1]], bench[days[i]]
+        if not a_nav or not a_gld:
+            continue
+        excess.append((b_nav / a_nav - 1) - (b_gld / a_gld - 1))
+    if len(excess) < MIN_TRACK_DAYS:
+        return {}
+    return {
+        "te": round(statistics.pstdev(excess) * (252 ** 0.5) * 100, 3),
+        "te_days": len(excess),
+    }
 
 
 def build() -> dict:
-    """取数 → 算溢价 → 排名。返回给 derive_gold 的裸数据。"""
+    """取数 → 算综合费率与年化跟踪误差 → 排名。返回给 derive_gold 的裸数据。"""
     universe = collect_universe()
     if not universe:
         raise RuntimeError("未搜到任何黄金类 ETF")
+    codes = [u["code"] for u in universe]
 
-    quotes = _quotes([u["code"] for u in universe])
+    quotes = _quotes(codes)
 
     # 距历史最高收盘的回撤。必须**逐只**取：上市时间不同 → 高点窗口不同
     # （2020 年才上市的上海金 ETF，没有 2013 年以来那段行情）。
     # 走 curl 串行取，14 只约 4s；单只失败回落缓存，缓存也没有就显示「—」。
     _load_hist_cache()
-    codes = [u["code"] for u in universe]
     hist = {}
     for c in codes:
         s = fetch_hist_stats(c)
@@ -423,6 +587,42 @@ def build() -> dict:
     if len(hist) < len(codes):
         logger.info("  [gold] 历史日线只取到 %d/%d 只", len(hist), len(codes))
 
+    # 费率：缓存优先（费率写在基金合同里、极少变动），未命中才去打档案页
+    _load_fee_cache()
+    fees: dict[str, dict] = {}
+    for c in codes:
+        f = _FEE_CACHE.get(c)
+        if not f:
+            f = _fee_f10(c)
+            if f:
+                _FEE_CACHE[c] = f
+                _FEE_CACHE_DIRTY.add(c)
+                time.sleep(0.15)
+        fees[c] = f
+    _save_fee_cache()
+    got_fee = sum(1 for f in fees.values() if f.get("mgmt") is not None)
+    if got_fee < len(codes):
+        logger.info("  [gold] 费率只取到 %d/%d 只", got_fee, len(codes))
+
+    # 基准金价：上海金 / Au99.99 各一条。取不到只让跟踪误差留空，
+    # 不影响行情与回撤（这两块不依赖基准）。
+    benches = {cat: _bench_series(cat) for cat in GOLD_BENCH}
+    for cat, series in benches.items():
+        if not series:
+            logger.info("  [gold] 基准金价未取到：%s", cat)
+
+    # 逐只净值序列 → 年化跟踪误差。每只一个 ~550KB 的全量净值文件，
+    # 串行 + 小间隔，避免被东财限频（限频时是静默返回空，不会报错）。
+    tracks: dict[str, dict] = {}
+    for u in universe:
+        nv = _nav_full(u["code"])
+        tracks[u["code"]] = (_track_error(nv, benches.get(u["category"]) or {})
+                             if nv else {})
+        time.sleep(0.15)
+    got_te = sum(1 for t in tracks.values() if t.get("te") is not None)
+    if got_te < len(codes):
+        logger.info("  [gold] 跟踪误差只算到 %d/%d 只", got_te, len(codes))
+
     rows = []
     for u in universe:
         q = quotes.get(u["code"]) or {}
@@ -430,11 +630,21 @@ def build() -> dict:
         row.update({k: q.get(k) for k in
                     ("price", "prev_close", "change_pct", "amount", "bid1", "ask1",
                      "quote_time")})
-        premium = None
-        if row.get("price") and u.get("nav"):
-            premium = round((row["price"] / u["nav"] - 1) * 100, 3)
-        row["premium"] = premium
-        row["premium_level"] = _classify(premium) if premium is not None else None
+        # 综合费率 = 管理费 + 托管费。两个都拿到才算：只拿到一个说明档案页结构
+        # 变了，硬加会得出偏低的假费率，宁可显示「—」。
+        f = fees.get(u["code"]) or {}
+        if f.get("mgmt") is not None and f.get("cust") is not None:
+            row["fee_mgmt"], row["fee_cust"] = f["mgmt"], f["cust"]
+            row["fee_total"] = round(f["mgmt"] + f["cust"], 2)
+        else:
+            row["fee_mgmt"] = row["fee_cust"] = row["fee_total"] = None
+        row["fee_cached"] = bool(_FEE_CACHE.get(u["code"]))
+
+        t = tracks.get(u["code"]) or {}
+        row["te"] = t.get("te")
+        row["te_days"] = t.get("te_days")
+        row["te_bench"] = (GOLD_BENCH.get(u["category"]) or ("", ""))[1]
+
         spread = None
         if row.get("bid1") and row.get("ask1"):
             spread = round((row["ask1"] - row["bid1"]) / row["bid1"] * 100, 4)
@@ -450,17 +660,21 @@ def build() -> dict:
         )
         rows.append(row)
 
-    ok = [r for r in rows if r["premium"] is not None]
-    ok.sort(key=lambda r: (r["premium"], -(r.get("amount") or 0),
-                           r["spread"] if r["spread"] is not None else 999))
+    # 排序：费率低的在前（这是确定性成本，直接决定长期持有谁更划算）；
+    # 同费率看成交额（买得动）；再同看跟踪误差（跟得稳）。
+    ok = [r for r in rows if r["fee_total"] is not None]
+    ok.sort(key=lambda r: (r["fee_total"], -(r.get("amount") or 0),
+                           r["te"] if r.get("te") is not None else 999))
     failed = [{"code": r["code"], "name": r["short_name"],
-               "error": "价格或净值未取到"} for r in rows if r["premium"] is None]
+               "error": "费率或行情未取到"} for r in rows if r["fee_total"] is None]
 
     sh = [r for r in ok if r["category"] == "上海金"]
     au = [r for r in ok if r["category"] == "黄金"]
     nav_dates = sorted({r["nav_date"] for r in ok if r.get("nav_date")})
     nav_date = nav_dates[-1] if nav_dates else ""
-    basis = f"{nav_date} 单位净值" if nav_date else "未知"
+    # 跟踪误差窗口：各只上市时间不同，实际窗口长度会不一样，取出现最多的那个展示
+    wins = [r["te_days"] for r in ok if r.get("te_days")]
+    te_days = max(set(wins), key=wins.count) if wins else 0
 
     # 场内价的那一天。别省这一步：简报在北京 06:45 跑，A 股还没开盘，
     # 行情其实是**上一交易日收盘**；遇上长假（如国庆）会差好几天。
@@ -484,11 +698,14 @@ def build() -> dict:
         "quote_date": quote_date,
         "quote_hm": quote_hm,
         "stale": stale,
-        "basis_label": basis,
+        "te_label": (f"近 {te_days} 个交易日" if te_days else "未取到"),
+        "te_window": te_days,
         "sh_count": len(sh),
         "au_count": len(au),
         "data_status": f"{len(ok)} 只（上海金 {len(sh)} ／ 黄金 {len(au)}）",
         # 回撤用的日线里，有多少只是回落缓存取到的（取数失败才会 >0）
         "hist_cached": sum(1 for r in ok if r.get("hist_from_cache")),
-        "premium_ok_max": 0.3,        # 黄金的可接受上限：0.3%（不是纳指的 2%）
+        # 费率有多少只是走缓存（非当日现取）· 跟踪误差有多少只没算出来
+        "fee_cached": sum(1 for r in ok if r.get("fee_cached")),
+        "te_missing": sum(1 for r in ok if r.get("te") is None),
     }

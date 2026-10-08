@@ -537,14 +537,25 @@ def derive_gold(raw: dict, convention: str = "cn") -> dict:
     """格式化 + 结论。raw 来自 src/providers/gold_etf.build()。"""
     ranked = raw["ranked"]
     for e in ranked:
-        e["premium_display"] = (f"{e['premium']:+.3f}%" if e.get("premium") is not None else "—")
+        e["fee_display"] = (f"{e['fee_total']:.2f}%"
+                            if e.get("fee_total") is not None else "—")
+        e["te_display"] = (f"{e['te']:.3f}%"
+                           if e.get("te") is not None else "—")
+        # 费率档位（表格着色用）：≤0.20 低 / ≤0.30 中 / 其余高
+        ft = e.get("fee_total")
+        e["fee_level"] = ("low" if ft is not None and ft <= 0.20 else
+                          "mid" if ft is not None and ft <= 0.30 else
+                          ("high" if ft is not None else None))
+        # 跟踪误差是否明显偏离同类。黄金 ETF 常态在 0.02%~0.06%，
+        # 超过 0.08% 就已经是同类数倍，值得单独标出来。
+        e["te_alert"] = bool(e.get("te") is not None and e["te"] > 0.08)
         e["price_display"] = price(e.get("price"), 3)
         e["amount_display"] = money_cn(e.get("amount"))
         e["change_display"] = pct_from_percent(e.get("change_pct"), 2, signed=True)
         e["change_color"] = change_color(e.get("change_pct"), convention)
         e["spread_display"] = (f"{e['spread']:.3f}%" if e.get("spread") is not None else "—")
-        # 距历史最高收盘的回撤（负值）。与溢价是两件事：溢价说「买得贵不贵」，
-        # 回撤说「现在的位置高不高」。
+        # 距历史最高收盘的回撤（负值）。费率说「长期持有谁更省」，回撤说
+        # 「现在的位置高不高」—— 两件事要分开看。
         e["dd_display"] = (f"{e['dd_from_high']:+.2f}%"
                            if e.get("dd_from_high") is not None else "—")
         e["dd_color"] = change_color(e.get("dd_from_high"), convention)
@@ -552,31 +563,51 @@ def derive_gold(raw: dict, convention: str = "cn") -> dict:
                                if e.get("hist_high_date") else "")
 
     def _best(pool):
-        """组内「溢价 ≤ 上限 里成交额最大」的那只 —— 便宜又好买。"""
+        """组内「费率最低 + 流动性达标」的那只；同费率取成交额大的（买得动）。"""
         qualified = [r for r in pool
-                     if r.get("premium") is not None
-                     and r["premium"] <= raw["premium_ok_max"]
-                     and not r["low_liquidity"]]
-        return max(qualified, key=lambda r: r.get("amount") or 0) if qualified else None
+                     if r.get("fee_total") is not None and not r["low_liquidity"]]
+        if not qualified:
+            return None
+        return min(qualified, key=lambda r: (r["fee_total"],
+                                             -(r.get("amount") or 0)))
 
     sh_best = _best(raw["sh"])
     au_best = _best(raw["au"])
-    lowest = ranked[0] if ranked else None
+    cheapest = ranked[0] if ranked else None
 
-    # 一句话结论：黄金 ETF 溢价常年贴着 0，真正要说的是「有没有异常」和「选哪只」
-    abnormal = [r for r in ranked if r["premium"] > 1.0]
-    if abnormal:
-        verdict = (f"有 {len(abnormal)} 只溢价超过 1%（"
-                   + "、".join(f"{r['code']} {r['premium']:.2f}%" for r in abnormal[:3])
-                   + "），溢价回落风险大于金价本身波动")
+    # 一句话结论：黄金 ETF 之间没有可套利的折溢价，真正决定长期收益的是
+    # 「费率」这个确定性成本，其次是「跟不跟得住」。
+    fee_vals = sorted({r["fee_total"] for r in ranked
+                       if r.get("fee_total") is not None})
+    te_vals = [r["te"] for r in ranked if r.get("te") is not None]
+
+    if len(fee_vals) >= 2:
+        n_low = sum(1 for r in ranked if r.get("fee_total") == fee_vals[0])
+        n_high = sum(1 for r in ranked if r.get("fee_total") == fee_vals[-1])
+        verdict = (f"费率分 {len(fee_vals)} 档：最低 {fee_vals[0]:.2f}%（{n_low} 只）"
+                   f"到最高 {fee_vals[-1]:.2f}%（{n_high} 只），每年差 "
+                   f"{fee_vals[-1] - fee_vals[0]:.2f} 个百分点 —— 这是持有成本上的"
+                   "确定性差距，比折溢价能给你的空间大一个量级")
+    elif fee_vals:
+        verdict = f"全部 {len(ranked)} 只费率一致（{fee_vals[0]:.2f}%），选哪只看流动性与跟踪误差"
     else:
-        verdict = (f"全部 {len(ranked)} 只溢价都在 ±0.2% 以内，套利充分，"
-                   f"选哪只主要看流动性而不是溢价")
+        verdict = "费率未取到，本次无法比较持有成本"
+
+    if te_vals:
+        te_med = sorted(te_vals)[len(te_vals) // 2]
+        worst = max((r for r in ranked if r.get("te") is not None),
+                    key=lambda r: r["te"])
+        if worst["te"] > te_med * 2.5:
+            verdict += (f"。跟踪误差中位 {te_med:.3f}%，而 {worst['code']} "
+                        f"{worst['short_name']} 达 {worst['te']:.3f}%（同类数倍）"
+                        f"且成交额最低，不建议")
+        else:
+            verdict += (f"。跟踪误差全部落在 {min(te_vals):.3f}%~{max(te_vals):.3f}%，"
+                        "跟得都很紧，这一项不构成区分")
 
     # 价格位置：距历史最高收盘的回撤。
-    # 与溢价是两件独立的事 —— 溢价说「这份资产比它的净值贵多少」，
-    # 回撤说「这份资产自己离最高点还差多远」。只看溢价会得出
-    # 「都在 ±0.2% 以内所以随便买」，但金价可能正处在深回撤里。
+    # 与费率是两件独立的事 —— 费率说「长期持有谁更省」，回撤说
+    # 「这份资产自己离最高点还差多远」。费率再低也挡不住 -28% 的位置。
     # 高点日取「日线最长的那只」：它经历过完整周期，最能代表金价本身；
     # 新上市标的窗口太短，高点会失真。
     dds = sorted(r["dd_from_high"] for r in ranked
@@ -591,7 +622,7 @@ def derive_gold(raw: dict, convention: str = "cn") -> dict:
     if dd_median is not None:
         verdict += (f"。价格位置上，{len(dds)} 只距历史最高收盘的回撤在 {dd_span}"
                     f"（中位 {dd_median:.1f}%，高点 {dd_high_date}）——"
-                    "回撤看的是「位置高不高」，溢价看的是「买得贵不贵」，两者要分开判断")
+                    "回撤看的是「位置高不高」，费率看的是「持有贵不贵」，两者要分开判断")
 
     # 场内价的那一天（简报 06:45 跑时是上一交易日收盘，长假后会差好几天）。
     # 两条腿的日期都要显式说出来，否则滞后的价会被读成「今天的价」、
@@ -608,19 +639,27 @@ def derive_gold(raw: dict, convention: str = "cn") -> dict:
         "au_count": raw["au_count"],
         "sh_best": sh_best,
         "au_best": au_best,
-        "lowest": lowest,
-        "lowest_display": (f"{lowest['premium']:+.3f}%" if lowest else "—"),
-        "lowest_label": (f"{lowest['code']} {lowest['short_name']}" if lowest else "—"),
+        "cheapest": cheapest,
+        "cheapest_display": (f"{cheapest['fee_total']:.2f}%" if cheapest else "—"),
+        "cheapest_label": (f"{cheapest['code']} {cheapest['short_name']}"
+                           if cheapest else "—"),
         "nav_date": raw["nav_date"],
         "quote_date": raw.get("quote_date", ""),
         "price_label": price_label,
         "stale": raw.get("stale", False),
         "stale_note": price_note,
         "price_note": price_note,
-        "basis_label": raw["basis_label"],
+        "te_label": raw.get("te_label", ""),
+        "te_window": raw.get("te_window", 0),
+        "fee_cached_count": raw.get("fee_cached", 0),
+        "te_missing_count": raw.get("te_missing", 0),
+        "fee_range": (f"{fee_vals[0]:.2f}% ~ {fee_vals[-1]:.2f}%"
+                      if len(fee_vals) >= 2 else
+                      (f"{fee_vals[0]:.2f}%" if fee_vals else "—")),
+        "te_range": (f"{min(te_vals):.3f}% ~ {max(te_vals):.3f}%"
+                     if te_vals else "—"),
         "data_status": raw["data_status"],
         "failed": raw["failed"],
-        "premium_ok_max": raw["premium_ok_max"],
         # 距历史最高收盘的回撤（组级）
         "dd_median": dd_median,
         "dd_median_display": (f"{dd_median:.1f}%" if dd_median is not None else "—"),
