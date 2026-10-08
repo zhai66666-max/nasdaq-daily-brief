@@ -289,15 +289,23 @@ def _secid(code: str) -> str:
     return ("1." if code.startswith(("5", "6")) else "0.") + code
 
 
-def _curl_get(url: str, *, attempts: int = 2, timeout: int = 25):
-    """用 **curl** 取数，不用 requests。
+def _hist_get(url: str, *, attempts: int = 2, timeout: int = 25):
+    """取历史日线：**curl 优先，失败再走 requests** —— 两条通道缺一不可。
 
-    实测（2026-10）：push2his.eastmoney.com 走 requests 会被沙箱代理掐断
-    （ProxyError / RemoteDisconnected），重试也是全失败 —— 14 只里只成功 1-5 只，
-    而且每次重试白等 7s，整块从 4s 变成 106s。同一条 URL 换成 curl 就 14/14、
-    每只 0.2-0.3s。项目里其余几个东财接口（suggest / fundf10 / 腾讯行情）
-    requests 是通的，所以只有这里改，不动已经跑稳的部分。
+    两个运行环境的失败面正好互补，各封一边，所以不能只留一条：
+
+      · 本地沙箱（走 HTTP 代理）：requests 会被代理掐断（ProxyError /
+        RemoteDisconnected），14 只只成功 1~5 只、每次重试白等 7s、整块从 4s
+        变 106s；同一条 URL 换成 curl 就 14/14、每只 0.2~0.3s。
+      · GitHub Actions（Azure 海外 IP、无代理）：**反过来**，curl 在这条 URL 上
+        全部取不到 —— 2026-10-08 09:07 那次 run 里 14 只全打「历史日线取数失败，
+        用缓存（截至 2026-09-30）」，而且是快失败不是超时；requests 无代理直连可通。
+
+    只留 curl 的后果是「本地 14/14、云端 0/14」这种一边静默走缓存：缓存不会自己
+    变新，回撤栏会停在旧快照上还不报错（那天恰好休市、缓存值与当日等价，纯属侥幸）。
+    所以这里两条都试，谁通用谁。
     """
+    # ① curl（本地沙箱的可用通道）
     for i in range(attempts):
         try:
             proc = subprocess.run(
@@ -310,6 +318,18 @@ def _curl_get(url: str, *, attempts: int = 2, timeout: int = 25):
             proc = None
         if proc and proc.stdout and proc.stdout.strip():
             return proc.stdout
+        if i + 1 < attempts:
+            time.sleep(0.6)
+
+    # ② requests 兜底（GitHub Actions 的可用通道）
+    for i in range(attempts):
+        try:
+            r = requests.get(url, headers=HEADERS, timeout=timeout)
+            if r.status_code == 200 and (r.text or "").strip():
+                logger.debug("  [gold] curl 未取到，requests 兜底成功：%s", url[:60])
+                return r.text
+        except requests.RequestException as exc:
+            logger.debug("  [gold] requests 兜底失败 %s: %s", url[:60], exc)
         if i + 1 < attempts:
             time.sleep(0.6)
     return None
@@ -359,7 +379,7 @@ def fetch_hist_stats(code: str) -> dict:
     url = ("https://push2his.eastmoney.com/api/qt/stock/kline/get"
            f"?secid={_secid(code)}&fields1=f1,f2,f3,f4,f5&fields2=f51,f53"
            "&klt=101&fqt=1&beg=0&end=20500101")
-    txt = _curl_get(url)
+    txt = _hist_get(url)
     stats = _parse_hist(txt) if txt else {}
     if stats:
         _HIST_CACHE[code] = stats
