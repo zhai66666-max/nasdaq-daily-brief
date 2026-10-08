@@ -566,6 +566,39 @@ def _track_error(nav: dict[str, float], bench: dict[str, float],
     }
 
 
+def _synthetic_bench(pools: list[dict[str, float]], window: int = TRACK_WINDOW):
+    """用组内多只基金净值收益率的中位数，合成一条基准序列（兜底用）。
+
+    只在拿不到外部金价日线时才用。依据：组内基金跟踪的是同一个金价，彼此日
+    收益之差只来自各自 ±0.05% 的微小溢价（还有费率），逐日取**中位数**可以把
+    这些噪声互相对冲掉，剩下的就是金价本身的方向。
+
+    好处是它完全不再依赖东财 push2his —— 那条接口在 CI 上会整条限频挂掉
+    （2026-10-08 那次云端 14 只历史日线全部回落缓存、跟踪误差整列变「—」），
+    而净值序列走的是另一个域名（pingzhongdata），两者不同时失败。
+
+    注意合成序列的起点是 1.0 这种任意水平：**没关系**，_track_error 只用收益率
+    算，与绝对水平无关。组内可用标的少于 3 只时不合成 —— 中位数不可靠。
+    """
+    seqs = [p for p in pools if len(p) >= MIN_TRACK_DAYS + 2]
+    if len(seqs) < 3:
+        return {}
+    dates = sorted(set.intersection(*(set(s) for s in seqs)))
+    dates = dates[-(window + 1):]
+    if len(dates) < MIN_TRACK_DAYS + 1:
+        return {}
+    level, out = 1.0, {dates[0]: 1.0}
+    for i in range(1, len(dates)):
+        rets = [s[dates[i]] / s[dates[i - 1]] - 1
+                for s in seqs
+                if s.get(dates[i - 1]) and s.get(dates[i])]
+        if len(rets) < 3:
+            continue
+        level *= 1 + statistics.median(rets)
+        out[dates[i]] = level
+    return out
+
+
 def nav_at_quote(nav, nav_date: str, quote_date: str, bench: dict[str, float],
                  peer_change: float | None = None):
     """把单位净值从 nav_date「搬」到场内价那天 quote_date，用于算同日溢价率。
@@ -640,21 +673,40 @@ def build() -> dict:
     if got_fee < len(codes):
         logger.info("  [gold] 费率只取到 %d/%d 只", got_fee, len(codes))
 
-    # 基准金价：上海金 / Au99.99 各一条。取不到只让跟踪误差留空，
-    # 不影响行情与回撤（这两块不依赖基准）。
+    # 基准金价：上海金 / Au99.99 各一条。取不到时会退化到「同组净值中位数」
+    # 合成基准（见 _synthetic_bench），只关系到跟踪误差，不影响行情与回撤。
     benches = {cat: _bench_series(cat) for cat in GOLD_BENCH}
     for cat, series in benches.items():
         if not series:
-            logger.info("  [gold] 基准金价未取到：%s", cat)
+            logger.info("  [gold] 基准金价未取到：%s（稍后尝试合成基准）", cat)
 
-    # 逐只净值序列 → 年化跟踪误差。每只一个 ~550KB 的全量净值文件，
-    # 串行 + 小间隔，避免被东财限频（限频时是静默返回空，不会报错）。
+    # 逐只净值序列。每只一个 ~550KB 的全量净值文件，串行 + 小间隔，
+    # 避免被东财限频（限频时是静默返回空，不会报错）。
+    navs: dict[str, dict[str, float]] = {}
+    for u in universe:
+        navs[u["code"]] = _nav_full(u["code"])
+        time.sleep(0.15)
+
+    # 兜底：某组的外部金价日线没取到时，用该组各只净值收益的中位数合成基准，
+    # 目的就是让跟踪误差不要因为 push2his 限频而整列变成「—」。
+    bench_src: dict[str, str] = {}
+    for cat in GOLD_BENCH:
+        if benches.get(cat):
+            bench_src[cat] = "外部金价日线"
+            continue
+        pool = [navs.get(u["code"]) or {} for u in universe if u["category"] == cat]
+        synth = _synthetic_bench(pool)
+        bench_src[cat] = "同组净值中位数合成" if synth else "未取到"
+        if synth:
+            benches[cat] = synth
+            logger.info("  [gold] %s 组基准改用合成（%d 只 / %d 个交易日）",
+                        cat, len([p for p in pool if p]), len(synth))
+
     tracks: dict[str, dict] = {}
     for u in universe:
-        nv = _nav_full(u["code"])
+        nv = navs.get(u["code"]) or {}
         tracks[u["code"]] = (_track_error(nv, benches.get(u["category"]) or {})
                              if nv else {})
-        time.sleep(0.15)
     got_te = sum(1 for t in tracks.values() if t.get("te") is not None)
     if got_te < len(codes):
         logger.info("  [gold] 跟踪误差只算到 %d/%d 只", got_te, len(codes))
@@ -707,6 +759,7 @@ def build() -> dict:
         row["te"] = t.get("te")
         row["te_days"] = t.get("te_days")
         row["te_bench"] = (GOLD_BENCH.get(u["category"]) or ("", ""))[1]
+        row["te_bench_src"] = bench_src.get(u["category"], "")
 
         spread = None
         if row.get("bid1") and row.get("ask1"):
@@ -768,6 +821,8 @@ def build() -> dict:
         "stale": stale,
         "te_label": (f"近 {te_days} 个交易日" if te_days else "未取到"),
         "te_window": te_days,
+        "te_bench_note": " · ".join(f"{c} 组基准 = {bench_src.get(c, '')}"
+                                    for c in GOLD_BENCH),
         "sh_count": len(sh),
         "au_count": len(au),
         "data_status": f"{len(ok)} 只（上海金 {len(sh)} ／ 黄金 {len(au)}）",

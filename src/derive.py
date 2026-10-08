@@ -680,6 +680,7 @@ def derive_gold(raw: dict, convention: str = "cn") -> dict:
         "price_note": price_note,
         "te_label": raw.get("te_label", ""),
         "te_window": raw.get("te_window", 0),
+        "te_bench_note": raw.get("te_bench_note", ""),
         "fee_cached_count": raw.get("fee_cached", 0),
         "te_missing_count": raw.get("te_missing", 0),
         "fee_range": (f"{fee_vals[0]:.2f}% ~ {fee_vals[-1]:.2f}%"
