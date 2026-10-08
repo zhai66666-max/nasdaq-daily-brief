@@ -566,27 +566,39 @@ def _track_error(nav: dict[str, float], bench: dict[str, float],
     }
 
 
-def nav_at_quote(nav, nav_date: str, quote_date: str, bench: dict[str, float]):
+def nav_at_quote(nav, nav_date: str, quote_date: str, bench: dict[str, float],
+                 peer_change: float | None = None):
     """把单位净值从 nav_date「搬」到场内价那天 quote_date，用于算同日溢价率。
 
     为什么要这一步：净值披露有滞后，直接拿最新已披露净值去比**当日**的场内价，
     算出来的是期间的金价涨跌幅（10-08 实测全 14 只同向 −1.8%），会被读成
-    「全场大幅折价」。而净值 = 金价 × 固定含金系数（实测日偏差 0.0027%），
-    所以乘一段金价涨跌幅就能把它平移过去。
+    「全场大幅折价」。而净值 = 金价 × 固定含金系数（实测日偏差 0.0027%）。
 
-    返回 (校准后净值 or None, 口径说明)。拿不到就返回 (None, "")
-    —— 调用方据此留空显示「—」，绝不拿伪数充数。
+    两条校准通道，优先用真的金价：
+      ① 东财金价日线：nav@Q = nav@N × (gold@Q / gold@N)，最准；
+      ② 同组 ETF 当日涨跌中位数：push2his 在 CI 上会限频失败（2026-10-08 那次
+         云端整条接口挂了，历史日线全部回落缓存），这时用腾讯行情的涨跌幅兜底。
+         依据是同组基金跟踪同一个金价，日涨跌之差只来自各自 ±0.05% 的微小
+         溢价，取中位数可把这些噪声对冲掉；腾讯行情两个环境都稳。
+
+    返回 (校准后净值 or None, 口径说明)。拿不到返回 (None, "")，调用方据此
+    留空显示「—」，绝不拿伪数充数。
     """
     if not nav or not quote_date:
         return None, ""
     if nav_date == quote_date:
         return nav, f"净值 {nav_date}（与场内价同日）"
-    if not nav_date or not bench:
+    if not nav_date:
         return None, ""
-    g_n, g_q = bench.get(nav_date), bench.get(quote_date)
-    if not g_n or not g_q:
+    if not quote_date:
         return None, ""
-    return nav * (g_q / g_n), f"净值 {nav_date} 已按金价校准至 {quote_date}"
+    g_n, g_q = (bench or {}).get(nav_date), (bench or {}).get(quote_date)
+    if g_n and g_q:
+        return nav * (g_q / g_n), f"净值 {nav_date} 已按金价校准至 {quote_date}"
+    if peer_change is not None:
+        return (nav * (1 + peer_change / 100),
+                f"净值 {nav_date} 已按同组当日涨跌中位数校准至 {quote_date}")
+    return None, ""
 
 
 def build() -> dict:
@@ -647,6 +659,19 @@ def build() -> dict:
     if got_te < len(codes):
         logger.info("  [gold] 跟踪误差只算到 %d/%d 只", got_te, len(codes))
 
+    # 同组 ETF 当日涨跌幅的中位数：金价日线取不到时用它把净值搬到场内价那天
+    # （nav_at_quote 的第②条通道）。腾讯行情在本地与 CI 两个环境都稳定，
+    # 不像东财 push2his 会限频整条挂掉。
+    peer_change: dict[str, float] = {}
+    for cat in GOLD_BENCH:
+        vals = [(quotes.get(u["code"]) or {}).get("change_pct")
+                for u in universe if u["category"] == cat]
+        vals = [v for v in vals if v is not None]
+        if vals:
+            peer_change[cat] = statistics.median(vals)
+    for cat, v in peer_change.items():
+        logger.info("  [gold] %s 组当日涨跌中位数 %.3f%%（溢价率兜底校准用）", cat, v)
+
     rows = []
     for u in universe:
         q = quotes.get(u["code"]) or {}
@@ -662,7 +687,8 @@ def build() -> dict:
         _qd = (f"{_qt[0:4]}-{_qt[4:6]}-{_qt[6:8]}"
                if len(_qt) >= 8 and _qt[:8].isdigit() else "")
         _nv_adj, _basis = nav_at_quote(row.get("nav"), row.get("nav_date") or "",
-                                       _qd, benches.get(row["category"]) or {})
+                                       _qd, benches.get(row["category"]) or {},
+                                       peer_change.get(row["category"]))
         row["premium"] = (round((row["price"] / _nv_adj - 1) * 100, 3)
                           if row.get("price") and _nv_adj else None)
         row["premium_basis"] = _basis
