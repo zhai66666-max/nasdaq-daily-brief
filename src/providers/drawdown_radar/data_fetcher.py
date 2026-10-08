@@ -22,6 +22,38 @@ LAST_SOURCE = "Yahoo Finance"
 YFINANCE_RETRIES = 3
 YFINANCE_RETRY_DELAY = 5  # seconds
 
+# ─── Helpers ───────────────────────────────────────────────────────────────────
+
+
+def _adj_close_series(df_t: pd.DataFrame) -> pd.Series:
+    """Adj Close 序列，并把**尾部因 Yahoo 还没算调整因子而缺的当日**用 Close 补出来。
+
+    为什么必须补：原来直接 `df_t["Adj Close"].dropna()`，而 Yahoo 在最新一根日线上
+    常把 Adj Close 留成 NaN（调整因子要等收盘结算后才生成），dropna 于是把
+    **最新交易日整根丢掉**。表现就是 09 区块标题永远写着 T-1：
+
+      2026-10-08 09:07 那次 run 显示「价格 10-06 收盘」，但美股 10-07 早已收盘
+      （美东 10-07 16:00 = 北京 10-08 04:00），NASDAQ 官方接口当天就能取到 10-07。
+      同一封邮件里 01 区块的纳指已是 10-07，09 区块却停在 10-06 —— 就是这个原因。
+
+    补法：从最后一个有效复权价出发，按 Close 的日涨跌把尾部外推，
+    保持复权序列连续（**不**直接接不复权价，否则除息日会被算成跳空、回撤偏大）。
+    """
+    adj = df_t["Adj Close"]
+    close = df_t["Close"] if "Close" in df_t.columns else None
+    last_ok = adj.last_valid_index()
+    if close is None or last_ok is None:
+        return adj.dropna()
+
+    out = adj.copy()
+    missing = out.isna() & (out.index > last_ok)
+    if missing.any():
+        ratio = (close / close.shift(1)).fillna(1.0)
+        ratio.loc[:last_ok] = 1.0          # 累计乘积只在尾部断点之后生效
+        out.loc[missing] = float(adj.loc[last_ok]) * ratio.cumprod().loc[missing]
+    return out.dropna()
+
+
 # ─── Public API ────────────────────────────────────────────────────────────────
 
 
@@ -96,9 +128,9 @@ def fetch_all_etfs(
                     continue
                 df_t = data[t].copy()
 
-            # Get Adjusted Close
+            # Get Adjusted Close（尾部缺的当日用 Close 补，见 _adj_close_series）
             if "Adj Close" in df_t.columns:
-                series = df_t["Adj Close"].dropna()
+                series = _adj_close_series(df_t)
             elif "Close" in df_t.columns:
                 series = df_t["Close"].dropna()
             else:
@@ -108,6 +140,14 @@ def fetch_all_etfs(
             if len(series) < 5:
                 errors[t] = f"Insufficient data ({len(series)} rows)"
                 continue
+
+            # 行情最后一根 vs 复权序列最后一根：两者不同才说明补齐动过手；
+            # 若补齐后仍落后行情，就是数据源自己没给这一根（需要换源，不是这里的锅）。
+            raw_last = df_t.index[-1]
+            logger.info("  %s 行情至 %s｜复权序列至 %s%s", t, raw_last.date(),
+                        series.index[-1].date(),
+                        "（尾部已按 Close 补齐）"
+                        if raw_last.date() != series.index[-1].date() else "")
 
             series.name = t
             if adj_close.empty:
