@@ -1,0 +1,114 @@
+{
+ "159812": {
+  "hist_high": 11.9,
+  "hist_high_date": "2026-01-29",
+  "hist_last_close": 8.596,
+  "hist_last_date": "2026-09-30",
+  "hist_first_date": "2020-05-29",
+  "hist_bars": 1540
+ },
+ "159830": {
+  "hist_high": 12.438,
+  "hist_high_date": "2026-01-29",
+  "hist_last_close": 9.019,
+  "hist_last_date": "2026-09-30",
+  "hist_first_date": "2021-07-19",
+  "hist_bars": 1263
+ },
+ "159831": {
+  "hist_high": 12.054,
+  "hist_high_date": "2026-01-29",
+  "hist_last_close": 8.728,
+  "hist_last_date": "2026-09-30",
+  "hist_first_date": "2022-04-07",
+  "hist_bars": 1090
+ },
+ "159834": {
+  "hist_high": 12.451,
+  "hist_high_date": "2026-01-29",
+  "hist_last_close": 9.014,
+  "hist_last_date": "2026-09-30",
+  "hist_first_date": "2022-03-16",
+  "hist_bars": 1104
+ },
+ "159934": {
+  "hist_high": 12.446,
+  "hist_high_date": "2026-01-29",
+  "hist_last_close": 9.022,
+  "hist_last_date": "2026-09-30",
+  "hist_first_date": "2013-12-16",
+  "hist_bars": 3112
+ },
+ "159937": {
+  "hist_high": 11.888,
+  "hist_high_date": "2026-01-29",
+  "hist_last_close": 8.614,
+  "hist_last_date": "2026-09-30",
+  "hist_first_date": "2014-09-01",
+  "hist_bars": 2937
+ },
+ "518600": {
+  "hist_high": 12.415,
+  "hist_high_date": "2026-01-29",
+  "hist_last_close": 8.995,
+  "hist_last_date": "2026-09-30",
+  "hist_first_date": "2020-08-05",
+  "hist_bars": 1494
+ },
+ "518660": {
+  "hist_high": 11.923,
+  "hist_high_date": "2026-01-29",
+  "hist_last_close": 8.667,
+  "hist_last_date": "2026-09-30",
+  "hist_first_date": "2020-05-29",
+  "hist_bars": 1540
+ },
+ "518680": {
+  "hist_high": 12.45,
+  "hist_high_date": "2026-01-29",
+  "hist_last_close": 9.052,
+  "hist_last_date": "2026-09-30",
+  "hist_first_date": "2020-07-28",
+  "hist_bars": 1500
+ },
+ "518800": {
+  "hist_high": 12.472,
+  "hist_high_date": "2026-01-29",
+  "hist_last_close": 9.056,
+  "hist_last_date": "2026-09-30",
+  "hist_first_date": "2013-07-29",
+  "hist_bars": 3205
+ },
+ "518850": {
+  "hist_high": 11.985,
+  "hist_high_date": "2026-01-29",
+  "hist_last_close": 8.726,
+  "hist_last_date": "2026-09-30",
+  "hist_first_date": "2020-06-05",
+  "hist_bars": 1535
+ },
+ "518860": {
+  "hist_high": 11.927,
+  "hist_high_date": "2026-01-29",
+  "hist_last_close": 8.656,
+  "hist_last_date": "2026-09-30",
+  "hist_first_date": "2020-09-07",
+  "hist_bars": 1465
+ },
+ "518880": {
+  "hist_high": 11.904,
+  "hist_high_date": "2026-01-29",
+  "hist_last_close": 8.633,
+  "hist_last_date": "2026-09-30",
+  "hist_first_date": "2013-07-29",
+  "hist_bars": 3205
+ },
+ "518890": {
+  "hist_high": 11.943,
+  "hist_high_date": "2026-01-29",
+  "hist_last_close": 8.645,
+  "hist_last_date": "2026-09-30",
+  "hist_first_date": "2020-09-28",
+  "hist_bars": 1456
+ }
+}

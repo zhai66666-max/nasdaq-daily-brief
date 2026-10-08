@@ -403,6 +403,63 @@ def _status_of(dd_historical: float | None) -> tuple[str, str, str]:
     return ("正常", "#16a34a", "🟢")
 
 
+# ─── 场内价日期标注（03 与 13 两个溢价区块共用）──────────────────────────────
+
+def quote_stamp(quote_time: str, nav_date: str | None = None) -> dict:
+    """把腾讯行情时间戳（如 20260930161457）翻成给人看的日期标注。
+
+    溢价是「两条腿」算出来的：场内价 + 净值基准。只写一个「溢价 X%」
+    而不写这两条腿各自是哪天的，读者会把滞后的价当成当日的价 ——
+    场内价与净值基准经常不同日（净值 T-1 披露；长假期间场内价还会
+    停在节前最后一个交易日），这两种情况看起来都像「异常溢价」。
+
+    返回 dict：
+      quote_time / quote_date / quote_hm  原始戳 / 「09-30」/「16:14」
+      price_label   「09-30 16:14 行情快照」
+      stale         价格日 ≠ 净值基准日
+      gap_days      价格日距今天数（解析失败为 None）
+      note          需要提示时才非空（两句用「；」连接）
+    """
+    out = {
+        "quote_time": quote_time or "",
+        "quote_date": "",
+        "quote_hm": "",
+        "price_label": "未知",
+        "stale": False,
+        "gap_days": None,
+        "note": "",
+    }
+    qt = quote_time or ""
+    if len(qt) >= 8 and qt[:8].isdigit():
+        out["quote_date"] = f"{qt[4:6]}-{qt[6:8]}"
+        if len(qt) >= 12 and qt[8:12].isdigit():
+            out["quote_hm"] = f"{qt[8:10]}:{qt[10:12]}"
+        out["price_label"] = (f"{out['quote_date']} {out['quote_hm']} 行情快照"
+                              if out["quote_hm"] else f"{out['quote_date']} 行情快照")
+
+    nav_short = nav_date[5:10] if len(nav_date or "") >= 10 else ""
+    out["stale"] = bool(out["quote_date"] and nav_short
+                        and out["quote_date"] != nav_short)
+
+    bits = []
+    if out["stale"]:
+        bits.append(f"场内价与净值基准不同日（{out['quote_date']} vs {nav_date}），"
+                    "通常是该日净值尚未披露")
+    if len(qt) >= 8 and qt[:8].isdigit():
+        try:
+            from datetime import date as _date
+            out["gap_days"] = (_date.today()
+                               - _date(int(qt[:4]), int(qt[4:6]), int(qt[6:8]))).days
+        except ValueError:
+            out["gap_days"] = None
+    if out["gap_days"] is not None and out["gap_days"] >= 3:
+        bits.append(f"场内价停在上一个交易日 {out['quote_date']}"
+                    f"（距今 {out['gap_days']} 天，休市期间无新成交），"
+                    "溢价读的是该日收盘水平")
+    out["note"] = "；".join(bits)
+    return out
+
+
 # ─── 来源 1：ETF 溢价与加仓信号展示 ──────────────────────────────────────────
 
 def derive_etf_monitor(raw: dict, convention: str = "cn") -> dict:
@@ -436,6 +493,15 @@ def derive_etf_monitor(raw: dict, convention: str = "cn") -> dict:
     else:
         as_of_short = as_of_full = "—"
 
+    # 场内价与净值的日期。两者经常不同日：QDII 净值按 T-1 披露，
+    # 长假期间场内价还会整体停在节前最后一个交易日（此时这封邮件
+    # 里 04 区块的纳指却已经走到假期后的最新收盘 —— 不标日期会
+    # 被读成「拿今天的价配前天的净值，所以溢价 10%+」）。
+    qtimes = sorted({e.get("quote_time") for e in ranked if e.get("quote_time")})
+    nav_dates = sorted({e.get("nav_date") for e in ranked if e.get("nav_date")})
+    nav_date = nav_dates[-1] if nav_dates else ""
+    stamp = quote_stamp(qtimes[-1] if qtimes else "", nav_date)
+
     return {
         "dd": dd,
         "ranked": ranked,
@@ -457,6 +523,10 @@ def derive_etf_monitor(raw: dict, convention: str = "cn") -> dict:
         "dd_as_of_full": as_of_full,        # 「09-24 收盘 30,478.86」——明细行用
         "data_status": raw["data_status"],
         "basis_label": raw["basis_label"],
+        "quote_date": stamp["quote_date"],
+        "price_label": stamp["price_label"],
+        "nav_date": nav_date,
+        "price_note": stamp["note"],
         "failed_etfs": raw["failed_etfs"],
     }
 
@@ -473,6 +543,13 @@ def derive_gold(raw: dict, convention: str = "cn") -> dict:
         e["change_display"] = pct_from_percent(e.get("change_pct"), 2, signed=True)
         e["change_color"] = change_color(e.get("change_pct"), convention)
         e["spread_display"] = (f"{e['spread']:.3f}%" if e.get("spread") is not None else "—")
+        # 距历史最高收盘的回撤（负值）。与溢价是两件事：溢价说「买得贵不贵」，
+        # 回撤说「现在的位置高不高」。
+        e["dd_display"] = (f"{e['dd_from_high']:+.2f}%"
+                           if e.get("dd_from_high") is not None else "—")
+        e["dd_color"] = change_color(e.get("dd_from_high"), convention)
+        e["high_date_short"] = (e["hist_high_date"][5:]
+                               if e.get("hist_high_date") else "")
 
     def _best(pool):
         """组内「溢价 ≤ 上限 里成交额最大」的那只 —— 便宜又好买。"""
@@ -496,28 +573,32 @@ def derive_gold(raw: dict, convention: str = "cn") -> dict:
         verdict = (f"全部 {len(ranked)} 只溢价都在 ±0.2% 以内，套利充分，"
                    f"选哪只主要看流动性而不是溢价")
 
+    # 价格位置：距历史最高收盘的回撤。
+    # 与溢价是两件独立的事 —— 溢价说「这份资产比它的净值贵多少」，
+    # 回撤说「这份资产自己离最高点还差多远」。只看溢价会得出
+    # 「都在 ±0.2% 以内所以随便买」，但金价可能正处在深回撤里。
+    # 高点日取「日线最长的那只」：它经历过完整周期，最能代表金价本身；
+    # 新上市标的窗口太短，高点会失真。
+    dds = sorted(r["dd_from_high"] for r in ranked
+                 if r.get("dd_from_high") is not None)
+    dd_median = (dds[len(dds) // 2] if len(dds) % 2
+                 else (dds[len(dds) // 2 - 1] + dds[len(dds) // 2]) / 2) if dds else None
+    longest = max((r for r in ranked if r.get("hist_bars")),
+                  key=lambda r: r["hist_bars"], default=None)
+    dd_high_date = longest["hist_high_date"] if longest else ""
+    dd_span = (f"{dds[0]:.1f}% ~ {dds[-1]:.1f}%" if len(dds) > 1
+               else (f"{dds[0]:.1f}%" if dds else "—"))
+    if dd_median is not None:
+        verdict += (f"。价格位置上，{len(dds)} 只距历史最高收盘的回撤在 {dd_span}"
+                    f"（中位 {dd_median:.1f}%，高点 {dd_high_date}）——"
+                    "回撤看的是「位置高不高」，溢价看的是「买得贵不贵」，两者要分开判断")
+
     # 场内价的那一天（简报 06:45 跑时是上一交易日收盘，长假后会差好几天）。
-    # 两种异常都要说出来，否则会被读成"异常溢价"或"今天的价"：
-    #   ① 价格日 ≠ 净值基准日（通常是当日净值还没披露）
-    #   ② 价格日距今天 ≥3 天（休市，如国庆/春节，场内根本没有新成交）
-    price_label = (f"{raw['quote_date']} {raw['quote_hm']} 行情快照"
-                   if raw.get("quote_date") else "未知")
-    bits = []
-    if raw.get("stale"):
-        bits.append(f"场内价与净值基准不同日（{raw['quote_date']} vs {raw['nav_date']}），"
-                    "通常是该日净值尚未披露")
-    gap = None
-    qt = raw.get("quote_time") or ""
-    if len(qt) >= 8 and qt[:8].isdigit():
-        try:
-            from datetime import date as _date
-            gap = (_date.today() - _date(int(qt[:4]), int(qt[4:6]), int(qt[6:8]))).days
-        except ValueError:
-            gap = None
-    if gap is not None and gap >= 3:
-        bits.append(f"场内价停在上一个交易日 {raw['quote_date']}（距今 {gap} 天，休市期间无新成交），"
-                    "溢价读的是该日收盘水平")
-    price_note = "；".join(bits)
+    # 两条腿的日期都要显式说出来，否则滞后的价会被读成「今天的价」、
+    # 常态溢价会被读成「异常溢价」。
+    stamp = quote_stamp(raw.get("quote_time", ""), raw.get("nav_date") or "")
+    price_label = stamp["price_label"]
+    price_note = stamp["note"]
 
     return {
         "ranked": ranked,
@@ -540,5 +621,17 @@ def derive_gold(raw: dict, convention: str = "cn") -> dict:
         "data_status": raw["data_status"],
         "failed": raw["failed"],
         "premium_ok_max": raw["premium_ok_max"],
+        # 距历史最高收盘的回撤（组级）
+        "dd_median": dd_median,
+        "dd_median_display": (f"{dd_median:.1f}%" if dd_median is not None else "—"),
+        "dd_high_date": dd_high_date,
+        "dd_high_date_short": dd_high_date[5:] if dd_high_date else "",
+        "dd_span": dd_span,
+        "dd_count": len(dds),
+        # 指标卡上的进度条：回撤越深条越长（绝对值，卡在 100 以内）
+        "dd_bar": (min(abs(dd_median), 100.0) if dd_median is not None else None),
+        "dd_as_of": (longest["hist_last_date"][5:] if longest else ""),
+        # 取数失败回落缓存的只数（>0 时口径行要说明，否则各行的截至日不一致）
+        "dd_cached_count": raw.get("hist_cached", 0),
         "verdict": verdict,
     }

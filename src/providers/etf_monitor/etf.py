@@ -41,6 +41,9 @@ def get_etf_data(etf_config):
         # 1. 实时行情
         quote = data_fetcher.fetch_etf_quote(code)
         result.update(quote)
+        # 腾讯行情把时间戳放在 'time'（形如 20260930161459），
+        # 这里统一成 quote_time —— 展示层要拿它标出「场内价是哪天的」。
+        result['quote_time'] = quote.get('time') or ''
 
         # 2. 净值/IOPV
         nav_data = data_fetcher.fetch_etf_nav_and_iopv(code)

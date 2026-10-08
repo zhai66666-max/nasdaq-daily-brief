@@ -19,6 +19,7 @@ from __future__ import annotations
 import json
 import logging
 import re
+import subprocess
 import time
 import urllib.parse
 from pathlib import Path
@@ -63,6 +64,36 @@ def _save_cache() -> None:
                                encoding="utf-8")
     except OSError as exc:
         logger.debug("  [gold] 缓存写入失败：%s", exc)
+
+
+# 历史日线缓存：{code: {hist_high, hist_high_date, hist_last_close, ...}}。
+# 沙箱/CI 里对东财的并发连接一多就会被代理掐断（RemoteDisconnected），
+# 实测「外层 4 源并发 × 内层 5 路」时 14 只只剩 5 只能取到。所以历史日线
+# 改成串行 + 3 次重试，再留这份缓存兜底：取不到时回落到上一次的日线，
+# 并把「截至日」如实带出去（不会把旧数据冒充当日）。
+_HIST_CACHE_PATH = (Path(__file__).resolve().parents[2]
+                    / "data" / "gold_hist_cache.json")
+_HIST_CACHE: dict[str, dict] = {}
+_HIST_CACHE_DIRTY: set[str] = set()
+
+
+def _load_hist_cache() -> None:
+    global _HIST_CACHE
+    try:
+        _HIST_CACHE = json.loads(_HIST_CACHE_PATH.read_text("utf-8")) or {}
+    except (OSError, json.JSONDecodeError):
+        _HIST_CACHE = {}
+
+
+def _save_hist_cache() -> None:
+    if not _HIST_CACHE_DIRTY:
+        return
+    try:
+        _HIST_CACHE_PATH.parent.mkdir(parents=True, exist_ok=True)
+        _HIST_CACHE_PATH.write_text(
+            json.dumps(_HIST_CACHE, ensure_ascii=False, indent=1), encoding="utf-8")
+    except OSError as exc:
+        logger.debug("  [gold] 历史缓存写入失败：%s", exc)
 
 # 黄金 ETF 溢价分级（百分点）：负值是折价，单独一档。
 PREMIUM_LEVELS = [
@@ -253,6 +284,96 @@ def collect_universe() -> list[dict]:
     return out
 
 
+def _secid(code: str) -> str:
+    """东财 secid：沪市前缀 1，深市前缀 0（与行情接口同一套规则）。"""
+    return ("1." if code.startswith(("5", "6")) else "0.") + code
+
+
+def _curl_get(url: str, *, attempts: int = 2, timeout: int = 25):
+    """用 **curl** 取数，不用 requests。
+
+    实测（2026-10）：push2his.eastmoney.com 走 requests 会被沙箱代理掐断
+    （ProxyError / RemoteDisconnected），重试也是全失败 —— 14 只里只成功 1-5 只，
+    而且每次重试白等 7s，整块从 4s 变成 106s。同一条 URL 换成 curl 就 14/14、
+    每只 0.2-0.3s。项目里其余几个东财接口（suggest / fundf10 / 腾讯行情）
+    requests 是通的，所以只有这里改，不动已经跑稳的部分。
+    """
+    for i in range(attempts):
+        try:
+            proc = subprocess.run(
+                ["curl", "-s", "--connect-timeout", "10", "--max-time", str(timeout),
+                 "-H", f"User-Agent: {HEADERS['User-Agent']}", url],
+                capture_output=True, text=True, timeout=timeout + 5,
+            )
+        except (OSError, subprocess.SubprocessError) as exc:
+            logger.debug("  [gold] curl 失败 %s: %s", url[:60], exc)
+            proc = None
+        if proc and proc.stdout and proc.stdout.strip():
+            return proc.stdout
+        if i + 1 < attempts:
+            time.sleep(0.6)
+    return None
+
+
+def _parse_hist(txt: str) -> dict:
+    """把日线 JSON 解析成回撤要用的那几项。解析不出来返回 {}。"""
+    try:
+        klines = (json.loads(txt).get("data") or {}).get("klines") or []
+    except (json.JSONDecodeError, AttributeError):
+        return {}
+    rows = []
+    for line in klines:
+        parts = line.split(",")
+        if len(parts) < 2:
+            continue
+        try:
+            rows.append((parts[0], float(parts[1])))
+        except ValueError:
+            continue
+    if not rows:
+        return {}
+    high_date, high = max(rows, key=lambda r: r[1])
+    last_date, last = rows[-1]
+    return {
+        "hist_high": high,
+        "hist_high_date": high_date,
+        "hist_last_close": last,
+        "hist_last_date": last_date,
+        "hist_first_date": rows[0][0],      # 上市首日 —— 高点窗口起点，说明样本长短
+        "hist_bars": len(rows),
+    }
+
+
+def fetch_hist_stats(code: str) -> dict:
+    """全历史日线 → 历史最高**收盘**价 / 高点日期 / 最新收盘 / 上市首日。
+
+    两个口径决定，都是为了别算出一个假回撤：
+      · 用**收盘价**而非盘中最高价 —— 与 04 区块的回撤定义一致
+        （回撤 = 当前收盘 / 历史最高收盘 − 1），盘中极值每天变、还会被长影线带偏。
+      · 用**前复权**（fqt=1）而非不复权 —— 黄金 ETF 也分红，不复权序列在除息日
+        会凭空跳空，等于伪造一个历史新高，把回撤算小甚至算成 0。
+
+    取数失败时回落到缓存（缓存里的「截至日」会被如实带出去，不会冒充当日数据），
+    连缓存都没有才返回 {}，让那一只在表里显示「—」而不是让整块挂掉。
+    """
+    url = ("https://push2his.eastmoney.com/api/qt/stock/kline/get"
+           f"?secid={_secid(code)}&fields1=f1,f2,f3,f4,f5&fields2=f51,f53"
+           "&klt=101&fqt=1&beg=0&end=20500101")
+    txt = _curl_get(url)
+    stats = _parse_hist(txt) if txt else {}
+    if stats:
+        _HIST_CACHE[code] = stats
+        _HIST_CACHE_DIRTY.add(code)
+        return stats
+
+    cached = _HIST_CACHE.get(code)
+    if cached:
+        logger.info("  [gold] %s 历史日线取数失败，用缓存（截至 %s）",
+                    code, cached.get("hist_last_date"))
+        return {**cached, "hist_from_cache": True}
+    return {}
+
+
 def _classify(premium: float) -> dict:
     for lv in PREMIUM_LEVELS:
         if premium <= lv["max"]:
@@ -267,6 +388,21 @@ def build() -> dict:
         raise RuntimeError("未搜到任何黄金类 ETF")
 
     quotes = _quotes([u["code"] for u in universe])
+
+    # 距历史最高收盘的回撤。必须**逐只**取：上市时间不同 → 高点窗口不同
+    # （2020 年才上市的上海金 ETF，没有 2013 年以来那段行情）。
+    # 走 curl 串行取，14 只约 4s；单只失败回落缓存，缓存也没有就显示「—」。
+    _load_hist_cache()
+    codes = [u["code"] for u in universe]
+    hist = {}
+    for c in codes:
+        s = fetch_hist_stats(c)
+        if s:
+            hist[c] = s
+    _save_hist_cache()
+    if len(hist) < len(codes):
+        logger.info("  [gold] 历史日线只取到 %d/%d 只", len(hist), len(codes))
+
     rows = []
     for u in universe:
         q = quotes.get(u["code"]) or {}
@@ -284,6 +420,14 @@ def build() -> dict:
             spread = round((row["ask1"] - row["bid1"]) / row["bid1"] * 100, 4)
         row["spread"] = spread
         row["low_liquidity"] = (row.get("amount") or 0) < LOW_LIQUIDITY
+        # 距历史最高收盘的回撤（负值）。用日线序列自己的最后一根收盘，
+        # 而不是行情接口的场内价 —— 场内价含溢价，与前复权序列不同口径。
+        st = hist.get(u["code"]) or {}
+        row.update(st)
+        row["dd_from_high"] = (
+            round((st["hist_last_close"] / st["hist_high"] - 1) * 100, 2)
+            if st.get("hist_high") and st.get("hist_last_close") else None
+        )
         rows.append(row)
 
     ok = [r for r in rows if r["premium"] is not None]
@@ -324,5 +468,7 @@ def build() -> dict:
         "sh_count": len(sh),
         "au_count": len(au),
         "data_status": f"{len(ok)} 只（上海金 {len(sh)} ／ 黄金 {len(au)}）",
+        # 回撤用的日线里，有多少只是回落缓存取到的（取数失败才会 >0）
+        "hist_cached": sum(1 for r in ok if r.get("hist_from_cache")),
         "premium_ok_max": 0.3,        # 黄金的可接受上限：0.3%（不是纳指的 2%）
     }
