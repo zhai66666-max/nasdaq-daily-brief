@@ -177,7 +177,8 @@ def collect_drawdown_radar() -> dict:
             metrics = metrics + gmetrics
             _order = {e["ticker"]: i for i, e in enumerate(ALL_ASSETS)}
             metrics.sort(key=lambda r: _order.get(r["ticker"], 99))
-            gold_src = "东方财富（黄金现货）"
+            _srcs = sorted(set((extra.get("sources") or {}).values()))
+            gold_src = (f"{'＋'.join(_srcs)}（黄金现货）" if _srcs else "黄金现货")
             logger.info("  [radar] 追加黄金现货 %d 个：%s",
                         len(gmetrics), "、".join(extra["series"]))
         if extra["errors"]:

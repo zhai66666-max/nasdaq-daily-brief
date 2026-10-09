@@ -263,21 +263,23 @@ def fetch_extra_assets() -> dict:
     latest: dict[str, float] = {}
     errors: dict[str, str] = {}
     cached: list[str] = []
+    sources: dict[str, str] = {}
 
     for a in EXTRA_ASSETS:
         t, secid = a["ticker"], a["secid"]
         try:
-            rows, used_cache = em_history.fetch_kline(secid)
+            rows, src, used_cache = em_history.fetch_kline(
+                secid, sina_symbol=a.get("sina_symbol", ""))
         except Exception as exc:                            # noqa: BLE001
-            errors[t] = f"东财取数异常：{exc}"
-            logger.warning("  [radar] %s 东财取数异常：%s", t, exc)
+            errors[t] = f"取数异常：{exc}"
+            logger.warning("  [radar] %s 取数异常：%s", t, exc)
             continue
 
         # 黄金收得比雷达跑批晚（上金所 15:30、伦敦金 24 小时），
         # 最后一根若还在走就必须剔除，否则「最新价」基准日与 ETF 对不上。
         rows = em_history.drop_unclosed(rows)
         if len(rows) < 30:
-            errors[t] = f"东财日线不足（{len(rows)} 行）"
+            errors[t] = f"日线不足（{len(rows)} 行）"
             logger.warning("  [radar] %s 日线不足：%d 行", t, len(rows))
             continue
 
@@ -288,14 +290,16 @@ def fetch_extra_assets() -> dict:
             continue
         series[t] = s
         latest[t] = float(s.iloc[-1])
+        sources[t] = src
         if used_cache:
             cached.append(t)
-        logger.info("  [radar] %s（%s）日线 %d 行，至 %s%s",
-                    t, secid, len(s), s.index[-1].date(),
+        logger.info("  [radar] %s（%s）日线 %d 行，至 %s｜源 %s%s",
+                    t, secid, len(s), s.index[-1].date(), src,
                     "（回落缓存）" if used_cache else "")
 
     em_history.save_cache()
-    return {"series": series, "latest": latest, "errors": errors, "cached": cached}
+    return {"series": series, "latest": latest, "errors": errors,
+            "cached": cached, "sources": sources}
 
 
 def _extend_from_official(series: pd.Series,

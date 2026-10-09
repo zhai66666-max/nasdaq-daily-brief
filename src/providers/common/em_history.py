@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import subprocess
 import time
 from datetime import datetime, timedelta, timezone
@@ -32,9 +33,15 @@ from src.paths import DATA_DIR
 logger = logging.getLogger(__name__)
 
 # 全历史日线：klt=101 日线，fqt=0 不复权（金价无分红，复权与否等价）
-KLINE_URL = ("https://push2his.eastmoney.com/api/qt/stock/kline/get"
-             "?secid={secid}&fields1=f1&fields2=f51,f53&klt=101&fqt=0"
-             "&beg=19900101&end=20500101")
+EM_URL = ("https://push2his.eastmoney.com/api/qt/stock/kline/get"
+          "?secid={secid}&fields1=f1&fields2=f51,f53&klt=101&fqt=0"
+          "&beg=19900101&end=20500101")
+# 同一路径的 80 端口版本：GitHub Actions（Azure 海外 IP）对东财 443 长期不通，
+# 单独留一条 http 通道给云端试 —— 多条通道的成本只是一次请求。
+EM_URL_HTTP = EM_URL.replace("https://", "http://")
+# 新浪国际期货/现货日线（伦敦金现 XAU、纽约金 GC 等）。海外可达性通常好于东财。
+SINA_URL = ("https://stock2.finance.sina.com.cn/futures/api/jsonp.php/var%20t=/"
+            "GlobalFuturesService.getGlobalFuturesDailyKLine?symbol={sym}")
 REFERER = "https://quote.eastmoney.com/"
 
 HEADERS = {
@@ -105,7 +112,7 @@ def _get(url: str, *, attempts: int = 2, timeout: int = 25) -> str | None:
 
 
 def _parse_klines(txt: str) -> list[tuple[str, float]]:
-    """把 kline JSON 解析成 [(date, close)]，按日期升序。解析不出来返回 []。"""
+    """东财 kline JSON → [(date, close)]，按日期升序。解析不出来返回 []。"""
     try:
         klines = (json.loads(txt).get("data") or {}).get("klines") or []
     except (json.JSONDecodeError, AttributeError, TypeError):
@@ -123,27 +130,73 @@ def _parse_klines(txt: str) -> list[tuple[str, float]]:
     return rows
 
 
-def fetch_kline(secid: str) -> tuple[list[tuple[str, float]], bool]:
-    """取某个东财代码的全历史日线。
+def _parse_sina(txt: str) -> list[tuple[str, float]]:
+    """新浪 jsonp → [(date, close)]。
 
-    返回 ([(date, close)], used_cache)。东财取不到时回落到上一次的缓存，
-    并把「用了缓存」如实带出去 —— 由调用方标注，不把旧数据冒充当日。
+    返回形如 `var t=([{"date":"2006-10-09","close":"577.100",...},...]);`；
+    国内期货那条用短键 `d`/`c`，一并兼容。
+    """
+    m = re.search(r"\((\[.*\])\)", txt, re.S)
+    if not m:
+        return []
+    try:
+        data = json.loads(m.group(1))
+    except (json.JSONDecodeError, TypeError):
+        return []
+    rows: list[tuple[str, float]] = []
+    for it in data if isinstance(data, list) else []:
+        if not isinstance(it, dict):
+            continue
+        d = it.get("date") or it.get("d")
+        c = it.get("close") or it.get("c")
+        if not d or c in (None, ""):
+            continue
+        try:
+            rows.append((str(d)[:10], float(c)))
+        except ValueError:
+            continue
+    rows.sort(key=lambda r: r[0])
+    return rows
+
+
+def fetch_kline(secid: str, *,
+                sina_symbol: str = "") -> tuple[list[tuple[str, float]], str, bool]:
+    """按序尝试多个源，返回 ([(date, close)], 命中的源名, 是否回落到缓存)。
+
+    顺序：东财 https → 东财 http → 新浪（若该标的配了代码）→ 本地缓存。
+    两个运行环境的可达性不同（本地 curl 通、云端要到 80 或新浪才通），
+    所以每一档都试一遍，并把**命中的源名带出去**，邮件页脚据此如实标注。
+
+    缓存是最后一道：取不到时回落到上一次的日线，并返回 used_cache=True，
+    调用方据此提示「数据截至 X」，绝不把旧数据冒充当日。
     """
     _load_cache()
-    txt = _get(KLINE_URL.format(secid=secid))
-    rows = _parse_klines(txt) if txt else []
-    if rows:
-        _cache[secid] = {"as_of": rows[-1][0], "rows": [[d, c] for d, c in rows]}
-        _cache_dirty.add(secid)
-        return rows, False
+
+    candidates: list[tuple[str, str, object]] = [
+        ("东财", EM_URL.format(secid=secid), _parse_klines),
+        ("东财(80)", EM_URL_HTTP.format(secid=secid), _parse_klines),
+    ]
+    if sina_symbol:
+        candidates.append(("新浪", SINA_URL.format(sym=sina_symbol), _parse_sina))
+
+    for name, url, parser in candidates:
+        txt = _get(url)
+        rows = parser(txt) if txt else []
+        if rows:
+            if name != "东财":
+                logger.info("  [radar] %s 走「%s」通道取到 %d 行", secid, name, len(rows))
+            _cache[secid] = {"as_of": rows[-1][0],
+                             "rows": [[d, c] for d, c in rows]}
+            _cache_dirty.add(secid)
+            return rows, name, False
 
     cached = _cache.get(secid) or {}
     rows = [(str(d), float(c)) for d, c in (cached.get("rows") or [])]
     if rows:
-        logger.warning("  [radar] %s 东财取数失败，回落到缓存（截至 %s）",
+        logger.warning("  [radar] %s 各源均取数失败，回落到缓存（截至 %s）",
                        secid, cached.get("as_of"))
-        return rows, True
-    return [], False
+        return rows, "缓存", True
+    return [], "", False
 
 
 def drop_unclosed(rows: list[tuple[str, float]]) -> list[tuple[str, float]]:
