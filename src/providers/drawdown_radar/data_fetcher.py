@@ -244,6 +244,63 @@ def _fill_from_fallback(
 # ─── 额外资产：黄金现货两个基准（走东财，不依赖 Yahoo）────────────────────────
 
 
+# 净值反推的标定窗口：短窗抗费率漂移、中位数抗异常日（见 _extend_by_fund 的注释）
+CALIB_DAYS = 20
+MIN_CALIB_DAYS = 10
+
+
+def _extend_by_fund(rows: list[tuple[str, float]],
+                    fund_code: str) -> tuple[list[tuple[str, float]], str]:
+    """金价取数失败时，用黄金 ETF 的净值序列把日线补到最新。
+
+    依据：基金净值 = 金价 × 每份含金量（常数系数）。gold_etf 已实证两者的日偏差
+    只有 0.0027%（净值即金价 × 0.009509），所以净值除回系数就是金价。
+
+    做法：拿**已有的真实金价**与净值序列求重叠期，用最近 `CALIB_DAYS` 个重叠日
+    标定系数 k = median(净值 ÷ 金价)，再把净值序列里比缓存更新的那些日子换算回金价。
+    标定用的是真实金价，所以不额外引入口径假设。
+
+    **窗口为什么取这么短（20 天）**：基金的费率磨损会让「净值 ÷ 金价」这个比例
+    逐年缓慢下移（518880 约 0.5%/年），用长窗口等于取了一个偏旧的水平。
+    2026-10-09 实测同一段数据、只换标定窗口，反推误差：
+
+        5 天 0.018% ｜ 20 天 0.042% ｜ 60 天 0.093% ｜ 250 天 0.332%
+
+    短窗抗漂移、中位数抗个别异常日，20 天是两者的平衡点。
+
+    为什么需要它：`push2his` 在云端是**限频型**失败（请求密度一高就大面积被拒，
+    2026-10-09 实测：radar 2 个请求能通、gold_etf 16 个连续请求几乎全被拒），
+    而「回落缓存」**并不会更新缓存** —— 不补的话回撤会一直停在旧快照上。
+    净值走的是另一个域名（fund.eastmoney.com），云端实测可达，正好互补。
+
+    返回 (新序列, 说明)；没有可补的返回 (原序列, "")。
+    """
+    if not rows or not fund_code:
+        return rows, ""
+    from src.providers.common import em_history
+
+    nav = em_history.fund_nav_series(fund_code)
+    if not nav:
+        return rows, ""
+    au = dict(rows)
+    overlap = sorted(d for d in nav if d in au and au[d])
+    if len(overlap) < MIN_CALIB_DAYS:
+        logger.warning("  [radar] 净值反推跳过：与 %s 的重叠期只有 %d 天",
+                       fund_code, len(overlap))
+        return rows, ""
+    ratios = sorted(nav[d] / au[d] for d in overlap[-CALIB_DAYS:])
+    k = ratios[len(ratios) // 2]
+    if not k or k <= 0:
+        return rows, ""
+    last = rows[-1][0]
+    added = [(d, round(nav[d] / k, 2)) for d in sorted(nav) if d > last]
+    if not added:
+        return rows, ""
+    logger.info("  [radar] 净值反推：按 %s 补 %d 天（系数 %.6f，重叠 %d 天）",
+                fund_code, len(added), k, len(overlap))
+    return rows + added, f"净值反推{fund_code}"
+
+
 def fetch_extra_assets() -> dict:
     """取「Yahoo 里没有对应代码」的额外资产日线（黄金现货两个基准），走东财。
 
@@ -278,6 +335,12 @@ def fetch_extra_assets() -> dict:
         # 黄金收得比雷达跑批晚（上金所 15:30、伦敦金 24 小时），
         # 最后一根若还在走就必须剔除，否则「最新价」基准日与 ETF 对不上。
         rows = em_history.drop_unclosed(rows)
+        note = ""
+        if used_cache:
+            # 回落缓存不会让缓存变新 —— 用云端可达的基金净值把缺口补上
+            rows, note = _extend_by_fund(rows, a.get("fallback_fund", ""))
+            if note:
+                rows = em_history.drop_unclosed(rows)
         if len(rows) < 30:
             errors[t] = f"日线不足（{len(rows)} 行）"
             logger.warning("  [radar] %s 日线不足：%d 行", t, len(rows))
@@ -290,11 +353,11 @@ def fetch_extra_assets() -> dict:
             continue
         series[t] = s
         latest[t] = float(s.iloc[-1])
-        sources[t] = src
+        sources[t] = src + (f"＋{note}" if note else "")
         if used_cache:
             cached.append(t)
         logger.info("  [radar] %s（%s）日线 %d 行，至 %s｜源 %s%s",
-                    t, secid, len(s), s.index[-1].date(), src,
+                    t, secid, len(s), s.index[-1].date(), sources[t],
                     "（回落缓存）" if used_cache else "")
 
     em_history.save_cache()

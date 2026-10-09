@@ -45,11 +45,17 @@ ETFS = [
 # `sina_symbol` 是该标的在新浪的备用代码（新浪国际期货/现货日线，海外可达性
 # 通常好于东财）。上海金没有对应代码 —— 新浪只有上期所黄金期货连续 AU0，
 # 口径是期货不是上金所现货，宁可留空也不冒充。
+# `fallback_fund` 是取数全失败时用来**反推**的黄金 ETF 代码（只对上海金有意义）：
+# 基金净值 = 金价 × 每份含金量（常数），而净值走的是云端可达的 fund.eastmoney.com。
+# 518880（华安黄金ETF）跟踪的就是上金所 Au99.99 现货合约，净值自 2013-07 起 3200+ 点。
+# 伦敦金在国外没有这样的国内基金，只能留空、靠缓存。
 EXTRA_ASSETS = [
     {"ticker": "Au99.99", "name_cn": "上海黄金交易所", "market": "上海金现货",
-     "unit": "元/克", "secid": "118.AU9999", "sina_symbol": ""},
+     "unit": "元/克", "secid": "118.AU9999", "sina_symbol": "",
+     "fallback_fund": "518880"},
     {"ticker": "XAU/USD", "name_cn": "国际现货黄金", "market": "伦敦金现",
-     "unit": "美元/盎司", "secid": "122.XAU", "sina_symbol": "XAU"},
+     "unit": "美元/盎司", "secid": "122.XAU", "sina_symbol": "XAU",
+     "fallback_fund": ""},
 ]
 
 ETF_TICKERS = [e["ticker"] for e in ETFS]          # 仅 yfinance 那 11 只

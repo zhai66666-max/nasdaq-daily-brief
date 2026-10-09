@@ -82,11 +82,13 @@ def save_cache() -> None:
 
 # ─── 取数 ─────────────────────────────────────────────────────────────────────
 
-def _get(url: str, *, attempts: int = 2, timeout: int = 25) -> str | None:
+def _get(url: str, *, attempts: int = 2, timeout: int = 25,
+         referer: str = "") -> str | None:
     """双通道 GET：curl 优先，失败再走 requests。都拿不到返回 None。"""
+    ref = referer or REFERER
     cmd = ["curl", "-s", "--connect-timeout", "10", "--max-time", str(timeout),
            "-H", f"User-Agent: {HEADERS['User-Agent']}",
-           "-H", f"Referer: {REFERER}", url]
+           "-H", f"Referer: {ref}", url]
     for i in range(attempts):
         try:
             proc = subprocess.run(cmd, capture_output=True, text=True,
@@ -98,9 +100,10 @@ def _get(url: str, *, attempts: int = 2, timeout: int = 25) -> str | None:
         if i + 1 < attempts:
             time.sleep(0.6)
 
+    hdrs = dict(HEADERS, Referer=ref)
     for i in range(attempts):
         try:
-            r = requests.get(url, headers=HEADERS, timeout=timeout)
+            r = requests.get(url, headers=hdrs, timeout=timeout)
             if r.status_code == 200 and (r.text or "").strip():
                 logger.debug("  [em] curl 未取到，requests 兜底成功：%s", url[:70])
                 return r.text
@@ -109,6 +112,44 @@ def _get(url: str, *, attempts: int = 2, timeout: int = 25) -> str | None:
         if i + 1 < attempts:
             time.sleep(0.6)
     return None
+
+
+def fund_nav_series(code: str) -> dict[str, float]:
+    """基金全量单位净值 {YYYY-MM-DD: 净值}，走天天基金的 pingzhongdata。
+
+    一次请求拿全史 3000+ 个点（约 550KB），且走的是 `fund.eastmoney.com` ——
+    实测这条域名在 GitHub Actions 上是通的，而行情域名 `push2his` 会被限频拒掉。
+    正因如此，它在下面被用作「金价取数失败时的反推来源」。
+
+    ⚠ 时间戳是「北京时间零点」的毫秒 epoch，按 UTC 还原会整体退一天
+    （10-08 的净值被标成 10-07），必须按 UTC+8 还原。
+    """
+    txt = _get(f"https://fund.eastmoney.com/pingzhongdata/{code}.js",
+               referer="https://fund.eastmoney.com/", timeout=30)
+    if not txt:
+        return {}
+    m = re.search(r"var Data_netWorthTrend\s*=\s*(\[.*?\]);", txt, re.S)
+    if not m:
+        return {}
+    try:
+        arr = json.loads(m.group(1))
+    except (json.JSONDecodeError, TypeError):
+        return {}
+    if not isinstance(arr, list):
+        return {}
+    out: dict[str, float] = {}
+    tz8 = timezone(timedelta(hours=8))
+    for it in arr:
+        if not isinstance(it, dict):
+            continue
+        try:
+            d = datetime.fromtimestamp(int(it["x"]) / 1000, tz=tz8)
+            val = it.get("y")
+            if val:
+                out[d.strftime("%Y-%m-%d")] = float(val)
+        except (KeyError, TypeError, ValueError):
+            continue
+    return out
 
 
 def _parse_klines(txt: str) -> list[tuple[str, float]]:
