@@ -339,8 +339,8 @@ def _secid(code: str) -> str:
     return ("1." if code.startswith(("5", "6")) else "0.") + code
 
 
-def _hist_get(url: str, *, attempts: int = 2, timeout: int = 25, referer: str = ""):
-    """带重试的双通道 GET（**curl 优先，失败再走 requests**）—— 两条通道缺一不可。
+def _get_once(url: str, *, attempts: int = 2, timeout: int = 25, referer: str = ""):
+    """对**单个** URL 做双通道 GET（curl 优先，失败再走 requests）。
 
     两个运行环境的失败面正好互补，各封一边，所以不能只留一条：
 
@@ -387,6 +387,30 @@ def _hist_get(url: str, *, attempts: int = 2, timeout: int = 25, referer: str = 
             logger.debug("  [gold] requests 兜底失败 %s: %s", url[:60], exc)
         if i + 1 < attempts:
             time.sleep(0.6)
+    return None
+
+
+def _hist_get(url: str, *, attempts: int = 2, timeout: int = 25, referer: str = ""):
+    """带重试与**协议回退**的 GET：https 的 curl/requests 都失败后，再试一次 80 端口。
+
+    为什么还要回退协议：2026-10-09 实测，GitHub Actions（Azure 海外 IP）上同一条
+    `push2his.eastmoney.com` 的 **443 被拒、80 通** —— 云端日志实锤
+    「118.AU9999 走「东财(80)」通道取到 5537 行」。东财对海外 IP 的 443 拦截
+    是域名级的，换 UA/Referer 都没用，只有降到 80 才通。
+
+    代价只是一次额外请求，而且只在 https 两侧都失败时才发；https 正常时
+    （本地、以及云端能通的那些接口）行为完全不变。
+    """
+    urls = [url]
+    if url.startswith("https://"):
+        urls.append("http://" + url[len("https://"):])
+    for idx, u in enumerate(urls):
+        got = _get_once(u, attempts=attempts, timeout=timeout, referer=referer)
+        if got:
+            if idx:
+                logger.info("  [gold] https 未取到，改走 80 端口成功：%s",
+                            u.split("?")[0])
+            return got
     return None
 
 
