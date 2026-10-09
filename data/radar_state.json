@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "last_run_ts": "2026-10-08T17:08:02.856500+08:00",
+  "last_run_ts": "2026-10-09T10:33:40.792636+08:00",
   "alerts": {
     "QQQM": {
       "dd_historical": {
@@ -94,9 +94,9 @@
       "dd_historical": {
         "0.2": {
           "last_alerted": "2026-10-07",
-          "last_value": 0.2155,
+          "last_value": 0.2248,
           "breach_start": "2026-09-30",
-          "consecutive_days": 20
+          "consecutive_days": 21
         },
         "0.3": {
           "last_alerted": null,
@@ -225,10 +225,10 @@
     "GLD": {
       "dd_historical": {
         "0.2": {
-          "last_alerted": "2026-10-02",
-          "last_value": 0.242,
+          "last_alerted": "2026-10-09",
+          "last_value": 0.2365,
           "breach_start": "2026-09-25",
-          "consecutive_days": 35
+          "consecutive_days": 36
         },
         "0.3": {
           "last_alerted": null,
