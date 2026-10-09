@@ -30,8 +30,30 @@ ETFS = [
     {"ticker": "GLD",  "name_cn": "黄金",         "market": "黄金"},
 ]
 
-ETF_TICKERS = [e["ticker"] for e in ETFS]
-ETF_LOOKUP = {e["ticker"]: e for e in ETFS}
+# ─── 额外资产：黄金现货两个基准（非 ETF，走东财通道）──────────────────────────
+# 09 区块在 11 只 ETF 之外并列两个金价基准，用来和 GLD（美股黄金 ETF，美元计价）
+# 互相映证：国内看上海金 Au99.99（元/克），国际看伦敦金现 XAU/USD（美元/盎司）。
+#
+# 它们都不是 ETF，Yahoo 里没有对应代码（**上海金尤其没有**），所以单独走东财：
+#   · 118.AU9999  上金所 Au99.99 现货，日线自 2004-01 起
+#   · 122.XAU     伦敦金现（东财名「黄金/美元」），日线自 1992-05 起
+# 这两个源与 ETF 走的 Yahoo 互不依赖，一边挂了另一边照常出数。
+#
+# `unit` 会渲染到资产名下（如「上海黄金交易所（元/克）」），因为同一张表里
+# 混着「点」「元/克」「美元/盎司」三种量纲，不标单位会被误读。
+EXTRA_ASSETS = [
+    {"ticker": "Au99.99", "name_cn": "上海黄金交易所", "market": "上海金现货",
+     "unit": "元/克", "secid": "118.AU9999"},
+    {"ticker": "XAU/USD", "name_cn": "国际现货黄金", "market": "伦敦金现",
+     "unit": "美元/盎司", "secid": "122.XAU"},
+]
+
+ETF_TICKERS = [e["ticker"] for e in ETFS]          # 仅 yfinance 那 11 只
+EXTRA_TICKERS = [e["ticker"] for e in EXTRA_ASSETS]
+
+# 展示顺序 = ETF 在前、黄金现货在后（09 区块的排序与 10 区块的「最深回撤」都按它）
+ALL_ASSETS = ETFS + EXTRA_ASSETS
+ETF_LOOKUP = {e["ticker"]: e for e in ALL_ASSETS}
 
 # ─── Data windows ─────────────────────────────────────────────────────────────
 TRADING_DAYS_52W = 252         # ~1 calendar year of trading days

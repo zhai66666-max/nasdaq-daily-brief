@@ -241,6 +241,63 @@ def _fill_from_fallback(
     return adj_close, latest_close
 
 
+# ─── 额外资产：黄金现货两个基准（走东财，不依赖 Yahoo）────────────────────────
+
+
+def fetch_extra_assets() -> dict:
+    """取「Yahoo 里没有对应代码」的额外资产日线（黄金现货两个基准），走东财。
+
+    与 ETF 那条链完全独立：不经过 yfinance，也不参与 NASDAQ 官方源对齐
+    （官方源没有金价，硬塞进去只会白跑一轮请求）。
+
+    返回 dict：
+      series  {ticker: pd.Series}  索引为 tz-naive DatetimeIndex
+      latest  {ticker: float}      最新一根**已收盘**日线的收盘价
+      errors  {ticker: 原因}       真正没取到的（会在 09 区块显示 N/A）
+      cached  [ticker]             本次回落到了本地缓存
+    """
+    from src.providers.common import em_history
+    from src.providers.drawdown_radar.config import EXTRA_ASSETS
+
+    series: dict[str, pd.Series] = {}
+    latest: dict[str, float] = {}
+    errors: dict[str, str] = {}
+    cached: list[str] = []
+
+    for a in EXTRA_ASSETS:
+        t, secid = a["ticker"], a["secid"]
+        try:
+            rows, used_cache = em_history.fetch_kline(secid)
+        except Exception as exc:                            # noqa: BLE001
+            errors[t] = f"东财取数异常：{exc}"
+            logger.warning("  [radar] %s 东财取数异常：%s", t, exc)
+            continue
+
+        # 黄金收得比雷达跑批晚（上金所 15:30、伦敦金 24 小时），
+        # 最后一根若还在走就必须剔除，否则「最新价」基准日与 ETF 对不上。
+        rows = em_history.drop_unclosed(rows)
+        if len(rows) < 30:
+            errors[t] = f"东财日线不足（{len(rows)} 行）"
+            logger.warning("  [radar] %s 日线不足：%d 行", t, len(rows))
+            continue
+
+        idx = pd.to_datetime([d for d, _ in rows])
+        s = pd.Series([c for _, c in rows], index=idx, name=t).dropna()
+        if len(s) < 30:
+            errors[t] = f"日线有效值不足（{len(s)} 行）"
+            continue
+        series[t] = s
+        latest[t] = float(s.iloc[-1])
+        if used_cache:
+            cached.append(t)
+        logger.info("  [radar] %s（%s）日线 %d 行，至 %s%s",
+                    t, secid, len(s), s.index[-1].date(),
+                    "（回落缓存）" if used_cache else "")
+
+    em_history.save_cache()
+    return {"series": series, "latest": latest, "errors": errors, "cached": cached}
+
+
 def _extend_from_official(series: pd.Series,
                           off_close: pd.Series) -> tuple[pd.Series, list[str]]:
     """用官方**未复权**收盘把复权序列外推到更晚的交易日（比值法）。

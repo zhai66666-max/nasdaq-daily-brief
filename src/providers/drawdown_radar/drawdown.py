@@ -12,8 +12,8 @@ import numpy as np
 import pandas as pd
 
 from src.providers.drawdown_radar.config import (
+    ALL_ASSETS,
     ETF_LOOKUP,
-    ETFS,
     TRADING_DAYS_52W,
     TRADING_DAYS_5Y,
     VOLATILITY_WINDOW,
@@ -251,6 +251,8 @@ def compute_all_metrics(
                 "ticker": ticker,
                 "name_cn": etf_info["name_cn"],
                 "market": etf_info["market"],
+                # 量纲各不相同（指数点 / 元每克 / 美元每盎司），要渲染到资产名下
+                "unit": etf_info.get("unit", ""),
                 "current_price": price_info["current_price"],
                 "daily_change_pct": price_info["daily_change_pct"],
                 "data_date": price_info["data_date"],
@@ -281,6 +283,7 @@ def compute_all_metrics(
                 "ticker": ticker,
                 "name_cn": etf_info["name_cn"],
                 "market": etf_info["market"],
+                "unit": etf_info.get("unit", ""),
                 "current_price": None,
                 "daily_change_pct": None,
                 "data_date": None,
@@ -294,8 +297,8 @@ def compute_all_metrics(
                 "error": str(exc),
             })
 
-    # Sort by ETF definition order
-    ticker_order = {e["ticker"]: i for i, e in enumerate(ETFS)}
+    # Sort by asset definition order（ETF 在前，黄金现货两个基准在后）
+    ticker_order = {e["ticker"]: i for i, e in enumerate(ALL_ASSETS)}
     results.sort(key=lambda r: ticker_order.get(r["ticker"], 99))
 
     logger.info("Metrics computed for %d/%d ETFs", len(results), len(adj_close.columns))

@@ -524,7 +524,7 @@
 <tr>
 <td class="mk" style="padding:9px 8px 2px;border-bottom:none;">
 <div style="font-weight:700;color:{{ theme.ink }};font-size:12.5px;">{{ r.ticker }}</div>
-<div style="font-size:10px;color:{{ theme.ink_mute }};line-height:1.4;">{{ r.name_cn }}</div>
+<div style="font-size:10px;color:{{ theme.ink_mute }};line-height:1.4;">{{ r.name_cn }}{% if r.unit %}（{{ r.unit }}）{% endif %}</div>
 </td>
 <td data-l="最新价" style="padding:9px 8px 2px;text-align:right;font-weight:700;color:{{ theme.ink }};border-bottom:none;">{{ r.price_display }}</td>
 <td data-l="昨日" style="padding:9px 8px 2px;text-align:right;font-weight:700;color:{{ r.change_color }};border-bottom:none;">{{ r.change_display }}</td>
@@ -542,7 +542,8 @@
 </div>
 <div style="font-size:10px;color:{{ theme.ink_mute }};margin-top:8px;line-height:1.7;">
 本区块含两种口径：<b>价格与涨跌</b>为 {{ radar.snapshot_label or '最新' }} 盘面快照；<b>回撤与分位</b>为收盘口径{{ ('（截至 ' ~ radar.basis_label ~ '）') if radar.basis_label else '' }}，口径为各资产自身全部历史。<br>
-纳斯达克100 行（QQQM）的「距高点回撤」采用 <b>NDX 指数口径</b>，与 02 区块、加仓决策引擎同源；其余资产长期回撤使用复权价格（Adj Close），最新价使用未复权收盘价 · 分位数基于 expanding-window 计算，无未来数据泄露
+纳斯达克100 行（QQQM）的「距高点回撤」采用 <b>NDX 指数口径</b>，与 02 区块、加仓决策引擎同源；其余资产长期回撤使用复权价格（Adj Close），最新价使用未复权收盘价 · 分位数基于 expanding-window 计算，无未来数据泄露<br>
+黄金两行（<b>Au99.99</b> 上海金 · <b>XAU/USD</b> 伦敦金现）走 <b>东方财富</b> 金价日线，与其余各行走的 Yahoo 通道互不依赖（上海金在 Yahoo 无对应代码）；其「昨日」按各自交易日历计算 —— 上金所遇国内节假日休市，跨假期时会显示为节前最后一个交易日至今的累计涨跌
 </div>
 </td></tr>
 {% endif %}

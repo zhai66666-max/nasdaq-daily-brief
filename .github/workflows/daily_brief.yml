@@ -179,13 +179,17 @@ jobs:
           retention-days: 30
           if-no-files-found: ignore
 
-      # DuckDB 行情库与雷达告警状态需要跨天累积，否则「新信号」每天都会重复报警
+      # DuckDB 行情库、雷达告警状态、东财日线缓存需要跨天累积：
+      #   · radar_state.json 不提交的话「新信号」每天都会重复报警
+      #   · em_hist_cache.json 是黄金现货两个基准的取数兜底 —— CI 每次都是全新
+      #     checkout，不回写的话缓存永远停在首次提交那一刻，取数一失败回撤栏
+      #     就停在旧快照上
       - name: 回写状态与行情库
         if: always()
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -f data/market.duckdb data/radar_state.json 2>/dev/null || true
+          git add -f data/market.duckdb data/radar_state.json data/em_hist_cache.json 2>/dev/null || true
           if git diff --cached --quiet; then
             echo "无状态变更，跳过提交"
           else

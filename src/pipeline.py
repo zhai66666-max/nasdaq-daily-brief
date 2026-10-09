@@ -155,6 +155,38 @@ def collect_drawdown_radar() -> dict:
     metrics = compute_all_metrics(adj_close, latest_close)
     logger.info("  [radar] 计算完成 %d 个资产", len(metrics))
 
+    gold_src = ""          # 黄金现货追加成功后填数据源，供页脚如实标注
+
+    # ── 追加黄金现货两个基准：上金所 Au99.99（元/克）、伦敦金现 XAU/USD（美元/盎司）
+    #    走东财通道，与上面的 Yahoo 链完全独立（Yahoo 里没有上海金）。
+    #
+    #    **单独算，不 join 进 adj_close**：黄金的交易日历与美股不同（含中国节假日，
+    #    伦敦金又几乎全年无休），并进同一张表再 ffill，黄金独有的日期会把重复的
+    #    ETF 价格铺进那些行，而 20 日波动率这类「只看尾部 N 根」的指标会被这些
+    #    重复值拉低。各算各的，只把结果并起来，就没有这个问题。
+    try:
+        import pandas as pd
+
+        from src.providers.drawdown_radar.config import ALL_ASSETS
+        from src.providers.drawdown_radar.data_fetcher import fetch_extra_assets
+
+        extra = fetch_extra_assets()
+        if extra["series"]:
+            gmetrics = compute_all_metrics(pd.DataFrame(extra["series"]),
+                                           extra["latest"])
+            metrics = metrics + gmetrics
+            _order = {e["ticker"]: i for i, e in enumerate(ALL_ASSETS)}
+            metrics.sort(key=lambda r: _order.get(r["ticker"], 99))
+            gold_src = "东方财富（黄金现货）"
+            logger.info("  [radar] 追加黄金现货 %d 个：%s",
+                        len(gmetrics), "、".join(extra["series"]))
+        if extra["errors"]:
+            errors.update(extra["errors"])
+        if extra["cached"]:
+            logger.warning("  [radar] 黄金现货回落缓存：%s", "、".join(extra["cached"]))
+    except Exception as exc:                        # noqa: BLE001
+        logger.warning("  [radar] 黄金现货追加失败（不影响 ETF 各行）：%s", exc)
+
     # ── 统一口径：纳斯达克100（QQQM）行的「距高点回撤」改走 NDX 指数，
     #    与 02 区块、加仓决策引擎同源，消除「ETF 复权 1.48%」vs「指数 1.27%」双口径打架。
     #    价格/涨跌仍显示 QQQM 实时值，只覆盖回撤这一族字段；失败则沿用原 ETF 复权口径。
@@ -207,7 +239,8 @@ def collect_drawdown_radar() -> dict:
         logger.warning("  [radar] 状态保存失败（不影响邮件）: %s", exc)
 
     return {"metrics": metrics, "alerts": alerts, "errors": errors,
-            "data_source": radar_fetch.LAST_SOURCE,
+            "data_source": (f"{radar_fetch.LAST_SOURCE} ＋ {gold_src}"
+                            if gold_src else radar_fetch.LAST_SOURCE),
             "basis_label": basis_label, "snapshot_label": snapshot_label,
             "intraday_dropped": intraday}
 
