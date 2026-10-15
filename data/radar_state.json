@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "last_run_ts": "2026-10-14T09:23:31.518261+08:00",
+  "last_run_ts": "2026-10-15T08:51:21.393694+08:00",
   "alerts": {
     "QQQM": {
       "dd_historical": {
@@ -72,9 +72,9 @@
       "dd_historical": {
         "0.2": {
           "last_alerted": "2026-10-13",
-          "last_value": 0.224,
+          "last_value": 0.2708,
           "breach_start": "2026-10-13",
-          "consecutive_days": 2
+          "consecutive_days": 3
         },
         "0.3": {
           "last_alerted": null,
@@ -93,10 +93,10 @@
     "INDA": {
       "dd_historical": {
         "0.2": {
-          "last_alerted": "2026-10-14",
-          "last_value": 0.2112,
-          "breach_start": "2026-09-30",
-          "consecutive_days": 29
+          "last_alerted": null,
+          "last_value": null,
+          "breach_start": null,
+          "consecutive_days": 0
         },
         "0.3": {
           "last_alerted": null,
@@ -226,9 +226,9 @@
       "dd_historical": {
         "0.2": {
           "last_alerted": "2026-10-09",
-          "last_value": 0.2294,
+          "last_value": 0.2418,
           "breach_start": "2026-09-25",
-          "consecutive_days": 44
+          "consecutive_days": 45
         },
         "0.3": {
           "last_alerted": null,
@@ -248,9 +248,9 @@
       "dd_historical": {
         "0.2": {
           "last_alerted": "2026-10-09",
-          "last_value": 0.2724,
+          "last_value": 0.2804,
           "breach_start": "2026-10-09",
-          "consecutive_days": 8
+          "consecutive_days": 9
         },
         "0.3": {
           "last_alerted": null,
@@ -270,9 +270,9 @@
       "dd_historical": {
         "0.2": {
           "last_alerted": "2026-10-09",
-          "last_value": 0.2319,
+          "last_value": 0.2422,
           "breach_start": "2026-10-09",
-          "consecutive_days": 8
+          "consecutive_days": 9
         },
         "0.3": {
           "last_alerted": null,
