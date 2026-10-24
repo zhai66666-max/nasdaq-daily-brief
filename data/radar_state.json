@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "last_run_ts": "2026-10-23T08:56:25.617592+08:00",
+  "last_run_ts": "2026-10-24T09:04:12.119807+08:00",
   "alerts": {
     "QQQM": {
       "dd_historical": {
@@ -72,15 +72,15 @@
       "dd_historical": {
         "0.2": {
           "last_alerted": "2026-10-20",
-          "last_value": 0.2843,
+          "last_value": 0.32,
           "breach_start": "2026-10-13",
-          "consecutive_days": 9
+          "consecutive_days": 10
         },
         "0.3": {
-          "last_alerted": null,
-          "last_value": null,
-          "breach_start": null,
-          "consecutive_days": 0
+          "last_alerted": "2026-10-24",
+          "last_value": 0.32,
+          "breach_start": "2026-10-24",
+          "consecutive_days": 1
         },
         "0.4": {
           "last_alerted": null,
@@ -226,9 +226,9 @@
       "dd_historical": {
         "0.2": {
           "last_alerted": "2026-10-23",
-          "last_value": 0.2358,
+          "last_value": 0.2559,
           "breach_start": "2026-09-25",
-          "consecutive_days": 51
+          "consecutive_days": 52
         },
         "0.3": {
           "last_alerted": null,
@@ -248,15 +248,15 @@
       "dd_historical": {
         "0.2": {
           "last_alerted": "2026-10-23",
-          "last_value": 0.2918,
+          "last_value": 0.3012,
           "breach_start": "2026-10-09",
-          "consecutive_days": 15
+          "consecutive_days": 16
         },
         "0.3": {
-          "last_alerted": null,
-          "last_value": null,
-          "breach_start": null,
-          "consecutive_days": 0
+          "last_alerted": "2026-10-24",
+          "last_value": 0.3012,
+          "breach_start": "2026-10-24",
+          "consecutive_days": 1
         },
         "0.4": {
           "last_alerted": null,
@@ -270,9 +270,9 @@
       "dd_historical": {
         "0.2": {
           "last_alerted": "2026-10-23",
-          "last_value": 0.2571,
+          "last_value": 0.2617,
           "breach_start": "2026-10-09",
-          "consecutive_days": 15
+          "consecutive_days": 16
         },
         "0.3": {
           "last_alerted": null,
