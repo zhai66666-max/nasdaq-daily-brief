@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "last_run_ts": "2026-11-05T10:45:47.808981+08:00",
+  "last_run_ts": "2026-11-06T10:48:45.001875+08:00",
   "alerts": {
     "QQQM": {
       "dd_historical": {
@@ -72,15 +72,15 @@
       "dd_historical": {
         "0.2": {
           "last_alerted": "2026-11-03",
-          "last_value": 0.306,
+          "last_value": 0.3994,
           "breach_start": "2026-10-13",
-          "consecutive_days": 18
+          "consecutive_days": 19
         },
         "0.3": {
           "last_alerted": "2026-11-05",
-          "last_value": 0.306,
+          "last_value": 0.3994,
           "breach_start": "2026-11-05",
-          "consecutive_days": 1
+          "consecutive_days": 2
         },
         "0.4": {
           "last_alerted": null,
@@ -115,10 +115,10 @@
     "EWT": {
       "dd_historical": {
         "0.2": {
-          "last_alerted": null,
-          "last_value": null,
-          "breach_start": null,
-          "consecutive_days": 0
+          "last_alerted": "2026-11-06",
+          "last_value": 0.2722,
+          "breach_start": "2026-11-06",
+          "consecutive_days": 1
         },
         "0.3": {
           "last_alerted": null,
@@ -204,9 +204,9 @@
       "dd_historical": {
         "0.2": {
           "last_alerted": "2026-11-03",
-          "last_value": 0.2863,
+          "last_value": 0.2972,
           "breach_start": "2026-10-27",
-          "consecutive_days": 8
+          "consecutive_days": 9
         },
         "0.3": {
           "last_alerted": null,
@@ -225,10 +225,10 @@
     "GLD": {
       "dd_historical": {
         "0.2": {
-          "last_alerted": "2026-10-30",
-          "last_value": 0.2489,
+          "last_alerted": "2026-11-06",
+          "last_value": 0.2428,
           "breach_start": "2026-09-25",
-          "consecutive_days": 60
+          "consecutive_days": 61
         },
         "0.3": {
           "last_alerted": null,
@@ -247,16 +247,16 @@
     "Au99.99": {
       "dd_historical": {
         "0.2": {
-          "last_alerted": "2026-10-30",
-          "last_value": 0.3051,
+          "last_alerted": "2026-11-06",
+          "last_value": 0.2888,
           "breach_start": "2026-10-09",
-          "consecutive_days": 24
+          "consecutive_days": 25
         },
         "0.3": {
-          "last_alerted": "2026-10-31",
-          "last_value": 0.3051,
-          "breach_start": "2026-10-24",
-          "consecutive_days": 9
+          "last_alerted": null,
+          "last_value": null,
+          "breach_start": null,
+          "consecutive_days": 0
         },
         "0.4": {
           "last_alerted": null,
@@ -269,10 +269,10 @@
     "XAU/USD": {
       "dd_historical": {
         "0.2": {
-          "last_alerted": "2026-10-30",
-          "last_value": 0.2505,
+          "last_alerted": "2026-11-06",
+          "last_value": 0.2452,
           "breach_start": "2026-10-09",
-          "consecutive_days": 24
+          "consecutive_days": 25
         },
         "0.3": {
           "last_alerted": null,
