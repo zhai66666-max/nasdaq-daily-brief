@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "last_run_ts": "2026-11-06T10:48:45.001875+08:00",
+  "last_run_ts": "2026-11-07T10:21:50.632045+08:00",
   "alerts": {
     "QQQM": {
       "dd_historical": {
@@ -72,15 +72,15 @@
       "dd_historical": {
         "0.2": {
           "last_alerted": "2026-11-03",
-          "last_value": 0.3994,
+          "last_value": 0.375,
           "breach_start": "2026-10-13",
-          "consecutive_days": 19
+          "consecutive_days": 20
         },
         "0.3": {
           "last_alerted": "2026-11-05",
-          "last_value": 0.3994,
+          "last_value": 0.375,
           "breach_start": "2026-11-05",
-          "consecutive_days": 2
+          "consecutive_days": 3
         },
         "0.4": {
           "last_alerted": null,
@@ -116,9 +116,9 @@
       "dd_historical": {
         "0.2": {
           "last_alerted": "2026-11-06",
-          "last_value": 0.2722,
+          "last_value": 0.2437,
           "breach_start": "2026-11-06",
-          "consecutive_days": 1
+          "consecutive_days": 2
         },
         "0.3": {
           "last_alerted": null,
@@ -204,9 +204,9 @@
       "dd_historical": {
         "0.2": {
           "last_alerted": "2026-11-03",
-          "last_value": 0.2972,
+          "last_value": 0.2923,
           "breach_start": "2026-10-27",
-          "consecutive_days": 9
+          "consecutive_days": 10
         },
         "0.3": {
           "last_alerted": null,
@@ -226,9 +226,9 @@
       "dd_historical": {
         "0.2": {
           "last_alerted": "2026-11-06",
-          "last_value": 0.2428,
+          "last_value": 0.2488,
           "breach_start": "2026-09-25",
-          "consecutive_days": 61
+          "consecutive_days": 62
         },
         "0.3": {
           "last_alerted": null,
@@ -248,15 +248,15 @@
       "dd_historical": {
         "0.2": {
           "last_alerted": "2026-11-06",
-          "last_value": 0.2888,
+          "last_value": 0.3012,
           "breach_start": "2026-10-09",
-          "consecutive_days": 25
+          "consecutive_days": 26
         },
         "0.3": {
-          "last_alerted": null,
-          "last_value": null,
-          "breach_start": null,
-          "consecutive_days": 0
+          "last_alerted": "2026-11-07",
+          "last_value": 0.3012,
+          "breach_start": "2026-11-07",
+          "consecutive_days": 1
         },
         "0.4": {
           "last_alerted": null,
@@ -270,9 +270,9 @@
       "dd_historical": {
         "0.2": {
           "last_alerted": "2026-11-06",
-          "last_value": 0.2452,
+          "last_value": 0.2468,
           "breach_start": "2026-10-09",
-          "consecutive_days": 25
+          "consecutive_days": 26
         },
         "0.3": {
           "last_alerted": null,
