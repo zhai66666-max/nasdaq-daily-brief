@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "last_run_ts": "2026-11-11T10:18:16.733335+08:00",
+  "last_run_ts": "2026-11-12T11:24:22.893931+08:00",
   "alerts": {
     "QQQM": {
       "dd_historical": {
@@ -72,15 +72,15 @@
       "dd_historical": {
         "0.2": {
           "last_alerted": "2026-11-10",
-          "last_value": 0.3651,
+          "last_value": 0.3257,
           "breach_start": "2026-10-13",
-          "consecutive_days": 22
+          "consecutive_days": 23
         },
         "0.3": {
-          "last_alerted": "2026-11-05",
-          "last_value": 0.3651,
+          "last_alerted": "2026-11-12",
+          "last_value": 0.3257,
           "breach_start": "2026-11-05",
-          "consecutive_days": 5
+          "consecutive_days": 6
         },
         "0.4": {
           "last_alerted": null,
@@ -204,9 +204,9 @@
       "dd_historical": {
         "0.2": {
           "last_alerted": "2026-11-10",
-          "last_value": 0.2886,
+          "last_value": 0.2821,
           "breach_start": "2026-10-27",
-          "consecutive_days": 12
+          "consecutive_days": 13
         },
         "0.3": {
           "last_alerted": null,
@@ -226,9 +226,9 @@
       "dd_historical": {
         "0.2": {
           "last_alerted": "2026-11-06",
-          "last_value": 0.2552,
+          "last_value": 0.2636,
           "breach_start": "2026-09-25",
-          "consecutive_days": 64
+          "consecutive_days": 65
         },
         "0.3": {
           "last_alerted": null,
@@ -248,9 +248,9 @@
       "dd_historical": {
         "0.2": {
           "last_alerted": "2026-11-06",
-          "last_value": 0.2893,
+          "last_value": 0.2977,
           "breach_start": "2026-10-09",
-          "consecutive_days": 28
+          "consecutive_days": 29
         },
         "0.3": {
           "last_alerted": null,
@@ -270,9 +270,9 @@
       "dd_historical": {
         "0.2": {
           "last_alerted": "2026-11-06",
-          "last_value": 0.2555,
+          "last_value": 0.2639,
           "breach_start": "2026-10-09",
-          "consecutive_days": 28
+          "consecutive_days": 29
         },
         "0.3": {
           "last_alerted": null,
