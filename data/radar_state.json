@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "last_run_ts": "2026-11-17T12:46:55.757990+08:00",
+  "last_run_ts": "2026-11-18T11:51:29.779413+08:00",
   "alerts": {
     "QQQM": {
       "dd_historical": {
@@ -72,15 +72,15 @@
       "dd_historical": {
         "0.2": {
           "last_alerted": "2026-11-17",
-          "last_value": 0.3771,
+          "last_value": 0.3827,
           "breach_start": "2026-10-13",
-          "consecutive_days": 26
+          "consecutive_days": 27
         },
         "0.3": {
           "last_alerted": "2026-11-12",
-          "last_value": 0.3771,
+          "last_value": 0.3827,
           "breach_start": "2026-11-05",
-          "consecutive_days": 9
+          "consecutive_days": 10
         },
         "0.4": {
           "last_alerted": null,
@@ -116,9 +116,9 @@
       "dd_historical": {
         "0.2": {
           "last_alerted": "2026-11-17",
-          "last_value": 0.2305,
+          "last_value": 0.2484,
           "breach_start": "2026-11-17",
-          "consecutive_days": 1
+          "consecutive_days": 2
         },
         "0.3": {
           "last_alerted": null,
@@ -204,15 +204,15 @@
       "dd_historical": {
         "0.2": {
           "last_alerted": "2026-11-17",
-          "last_value": 0.3158,
+          "last_value": 0.3136,
           "breach_start": "2026-10-27",
-          "consecutive_days": 16
+          "consecutive_days": 17
         },
         "0.3": {
           "last_alerted": "2026-11-17",
-          "last_value": 0.3158,
+          "last_value": 0.3136,
           "breach_start": "2026-11-17",
-          "consecutive_days": 1
+          "consecutive_days": 2
         },
         "0.4": {
           "last_alerted": null,
@@ -226,9 +226,9 @@
       "dd_historical": {
         "0.2": {
           "last_alerted": "2026-11-13",
-          "last_value": 0.2883,
+          "last_value": 0.2892,
           "breach_start": "2026-09-25",
-          "consecutive_days": 68
+          "consecutive_days": 69
         },
         "0.3": {
           "last_alerted": null,
@@ -248,15 +248,15 @@
       "dd_historical": {
         "0.2": {
           "last_alerted": "2026-11-13",
-          "last_value": 0.3327,
+          "last_value": 0.3303,
           "breach_start": "2026-10-09",
-          "consecutive_days": 32
+          "consecutive_days": 33
         },
         "0.3": {
           "last_alerted": "2026-11-13",
-          "last_value": 0.3327,
+          "last_value": 0.3303,
           "breach_start": "2026-11-13",
-          "consecutive_days": 3
+          "consecutive_days": 4
         },
         "0.4": {
           "last_alerted": null,
@@ -270,9 +270,9 @@
       "dd_historical": {
         "0.2": {
           "last_alerted": "2026-11-13",
-          "last_value": 0.2881,
+          "last_value": 0.2895,
           "breach_start": "2026-10-09",
-          "consecutive_days": 32
+          "consecutive_days": 33
         },
         "0.3": {
           "last_alerted": null,
