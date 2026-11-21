@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "last_run_ts": "2026-11-20T11:43:57.579566+08:00",
+  "last_run_ts": "2026-11-21T11:28:31.871823+08:00",
   "alerts": {
     "QQQM": {
       "dd_historical": {
@@ -72,21 +72,21 @@
       "dd_historical": {
         "0.2": {
           "last_alerted": "2026-11-17",
-          "last_value": 0.386,
+          "last_value": 0.4377,
           "breach_start": "2026-10-13",
-          "consecutive_days": 29
+          "consecutive_days": 30
         },
         "0.3": {
           "last_alerted": "2026-11-19",
-          "last_value": 0.386,
+          "last_value": 0.4377,
           "breach_start": "2026-11-05",
-          "consecutive_days": 12
+          "consecutive_days": 13
         },
         "0.4": {
-          "last_alerted": null,
-          "last_value": null,
-          "breach_start": null,
-          "consecutive_days": 0
+          "last_alerted": "2026-11-21",
+          "last_value": 0.4377,
+          "breach_start": "2026-11-21",
+          "consecutive_days": 1
         }
       }
     },
@@ -116,15 +116,15 @@
       "dd_historical": {
         "0.2": {
           "last_alerted": "2026-11-17",
-          "last_value": 0.2885,
+          "last_value": 0.3664,
           "breach_start": "2026-11-17",
-          "consecutive_days": 4
+          "consecutive_days": 5
         },
         "0.3": {
-          "last_alerted": null,
-          "last_value": null,
-          "breach_start": null,
-          "consecutive_days": 0
+          "last_alerted": "2026-11-21",
+          "last_value": 0.3664,
+          "breach_start": "2026-11-21",
+          "consecutive_days": 1
         },
         "0.4": {
           "last_alerted": null,
@@ -204,15 +204,15 @@
       "dd_historical": {
         "0.2": {
           "last_alerted": "2026-11-17",
-          "last_value": 0.347,
+          "last_value": 0.3684,
           "breach_start": "2026-10-27",
-          "consecutive_days": 19
+          "consecutive_days": 20
         },
         "0.3": {
           "last_alerted": "2026-11-17",
-          "last_value": 0.347,
+          "last_value": 0.3684,
           "breach_start": "2026-11-17",
-          "consecutive_days": 4
+          "consecutive_days": 5
         },
         "0.4": {
           "last_alerted": null,
@@ -226,15 +226,15 @@
       "dd_historical": {
         "0.2": {
           "last_alerted": "2026-11-20",
-          "last_value": 0.3241,
+          "last_value": 0.3489,
           "breach_start": "2026-09-25",
-          "consecutive_days": 71
+          "consecutive_days": 72
         },
         "0.3": {
           "last_alerted": "2026-11-19",
-          "last_value": 0.3241,
+          "last_value": 0.3489,
           "breach_start": "2026-11-19",
-          "consecutive_days": 2
+          "consecutive_days": 3
         },
         "0.4": {
           "last_alerted": null,
@@ -248,15 +248,15 @@
       "dd_historical": {
         "0.2": {
           "last_alerted": "2026-11-20",
-          "last_value": 0.3549,
+          "last_value": 0.3849,
           "breach_start": "2026-10-09",
-          "consecutive_days": 35
+          "consecutive_days": 36
         },
         "0.3": {
           "last_alerted": "2026-11-20",
-          "last_value": 0.3549,
+          "last_value": 0.3849,
           "breach_start": "2026-11-13",
-          "consecutive_days": 6
+          "consecutive_days": 7
         },
         "0.4": {
           "last_alerted": null,
@@ -270,15 +270,15 @@
       "dd_historical": {
         "0.2": {
           "last_alerted": "2026-11-20",
-          "last_value": 0.3308,
+          "last_value": 0.345,
           "breach_start": "2026-10-09",
-          "consecutive_days": 35
+          "consecutive_days": 36
         },
         "0.3": {
           "last_alerted": "2026-11-19",
-          "last_value": 0.3308,
+          "last_value": 0.345,
           "breach_start": "2026-11-19",
-          "consecutive_days": 2
+          "consecutive_days": 3
         },
         "0.4": {
           "last_alerted": null,
